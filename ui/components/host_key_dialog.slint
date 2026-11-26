@@ -6,7 +6,7 @@
 
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinInfoBar } from "basic/controls.slint";
+import { WinButton, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { DetailRow } from "basic/forms.slint";
 
 export component HostKeyDialog inherits Rectangle {
@@ -51,93 +51,119 @@ export component HostKeyDialog inherits Rectangle {
         body := VerticalLayout {
             width: root.width;
             height: root.height;
-            spacing: Theme.spacing-16;
+            spacing: Theme.spacing-12;
 
-            // Lead: severity + what happened
-            HorizontalLayout {
-                spacing: Theme.spacing-12;
-                alignment: start;
-
-                Rectangle {
-                    width: Theme.icon-size-large;
-                    height: Theme.icon-size-large;
-                    background: transparent;
-
-                    Icon {
-                        name: "warning";
-                        icon-color: root.is-changed ? Theme.critical : Theme.caution;
-                        icon-size: Theme.icon-size-large;
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
-                    }
-                }
-
-                VerticalLayout {
-                    spacing: Theme.spacing-4;
-                    horizontal-stretch: 1;
-
-                    Text {
-                        text: root.is-changed
-                            ? @tr("Host key changed for {0}.", root.target-text)
-                            : root.target-text != ""
-                                ? @tr("First-time host key for {0}.", root.target-text)
-                                : @tr("Verify the host key before continuing.");
-                        color: root.is-changed ? Theme.critical : Theme.text-primary;
-                        font-size: Theme.font-body;
-                        font-weight: Theme.weight-semibold;
-                        wrap: word-wrap;
-                    }
-
-                    if !root.is-changed : Text {
-                        text: @tr("Compare the fingerprint with a trusted source, then trust once or save it for next time.");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                    }
-                }
-            }
-
-            if root.is-changed : WinInfoBar {
-                severity: "error";
-                text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.");
-            }
-
-            // Facts to verify
-            VerticalLayout {
-                spacing: Theme.spacing-8;
-
-                if root.detail-visible && root.known-hosts-path-text != "" : DetailRow {
-                    label: @tr("Known hosts");
-                    value: root.known-hosts-path-text;
-                    mono: true;
-                }
-
-                if root.detail-visible && root.is-changed && root.expected-algorithm-text != "" : DetailRow {
-                    label: @tr("Expected");
-                    value: @tr("{0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
-                    mono: true;
-                }
-
-                if root.detail-visible && root.algorithm-text != "" : DetailRow {
-                    label: root.is-changed ? @tr("Presented") : @tr("Fingerprint");
-                    value: @tr("{0} {1}", root.algorithm-text, root.fingerprint-text);
-                    mono: true;
-                    last: true;
-                }
-
-                if !root.detail-visible && root.prompt-text != "" : Text {
-                    text: root.prompt-text;
-                    color: Theme.text-secondary;
-                    font-family: Theme.font-mono;
-                    font-size: Theme.font-body;
-                    wrap: word-wrap;
-                }
-            }
-
+            // 内容区可滚动：compact 560×340 下 changed 态（InfoBar + 3 行详情）
+            // 超过视口高度时仍保证页脚按钮始终固定可见、不被裁剪。
             Rectangle {
                 vertical-stretch: 1;
-                min-height: Theme.spacing-12;
+                min-height: 0px;
+                clip: true;
                 background: transparent;
+
+                content_scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: content_layout.preferred-height;
+
+                    content_layout := VerticalLayout {
+                        width: parent.width;
+                        spacing: Theme.spacing-12;
+                        alignment: start;
+
+                        // Lead: severity + what happened
+                        HorizontalLayout {
+                            spacing: Theme.spacing-12;
+                            alignment: start;
+
+                            Rectangle {
+                                width: Theme.icon-size-large;
+                                height: Theme.icon-size-large;
+                                background: transparent;
+
+                                Icon {
+                                    name: "warning";
+                                    icon-color: root.is-changed ? Theme.critical : Theme.caution;
+                                    icon-size: Theme.icon-size-large;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                            }
+
+                            VerticalLayout {
+                                spacing: Theme.spacing-4;
+                                horizontal-stretch: 1;
+
+                                Text {
+                                    text: root.is-changed
+                                        ? @tr("Host key changed for {0}.", root.target-text)
+                                        : root.target-text != ""
+                                            ? @tr("First-time host key for {0}.", root.target-text)
+                                            : @tr("Verify the host key before continuing.");
+                                    color: root.is-changed ? Theme.critical : Theme.text-primary;
+                                    font-size: Theme.font-body;
+                                    font-weight: Theme.weight-semibold;
+                                    wrap: word-wrap;
+                                }
+
+                                if !root.is-changed : Text {
+                                    text: @tr("Compare the fingerprint with a trusted source, then trust once or save it for next time.");
+                                    color: Theme.text-tertiary;
+                                    font-size: Theme.font-caption;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+
+                        if root.is-changed : WinInfoBar {
+                            severity: "error";
+                            text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.");
+                        }
+
+                        // Facts to verify
+                        VerticalLayout {
+                            spacing: Theme.spacing-8;
+
+                            if root.detail-visible && root.known-hosts-path-text != "" : DetailRow {
+                                label: @tr("Known hosts");
+                                value: root.known-hosts-path-text;
+                                mono: true;
+                            }
+
+                            if root.detail-visible && root.is-changed && root.expected-algorithm-text != "" : DetailRow {
+                                label: @tr("Expected");
+                                value: @tr("{0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
+                                mono: true;
+                            }
+
+                            if root.detail-visible && root.algorithm-text != "" : DetailRow {
+                                label: root.is-changed ? @tr("Presented") : @tr("Fingerprint");
+                                value: @tr("{0} {1}", root.algorithm-text, root.fingerprint-text);
+                                mono: true;
+                                last: true;
+                            }
+
+                            if !root.detail-visible && root.prompt-text != "" : Text {
+                                text: root.prompt-text;
+                                color: Theme.text-secondary;
+                                font-family: Theme.font-mono;
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: content_scroll.content-y;
+                    content-extent: content_scroll.content-height;
+                    viewport-extent: content_scroll.height;
+                }
             }
 
             Rectangle {

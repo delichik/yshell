@@ -41,13 +41,24 @@ export component KnownHostAddWindow inherits Window {
     private property <length> body-height:
         Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
-    ToolWindowChrome {
+    dialog_scope := FocusScope {
         width: Theme.tool-window-width-compact;
         height: Theme.tool-window-height-compact;
-        title-text: root.edit-mode ? @tr("Edit Known Host") : @tr("Add Known Host");
-        native-title-drag: root.native_title_drag;
-        close-requested => { root.canceled(); }
-        title-drag-requested => { root.title_drag_requested(); }
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+
+        ToolWindowChrome {
+            width: Theme.tool-window-width-compact;
+            height: Theme.tool-window-height-compact;
+            title-text: root.edit-mode ? @tr("Edit Known Host") : @tr("Add Known Host");
+            native-title-drag: root.native_title_drag;
+            close-requested => { root.canceled(); }
+            title-drag-requested => { root.title_drag_requested(); }
 
         VerticalLayout {
             width: root.body-width;
@@ -108,6 +119,7 @@ export component KnownHostAddWindow inherits Window {
                 }
             }
         }
+        }
     }
 
     init => {
@@ -115,6 +127,6 @@ export component KnownHostAddWindow inherits Window {
     }
 
     public function focus-dialog() {
-        // 无独立 FocusScope：由宿主把键盘焦点留在窗口（Esc 由宿主处理）。
+        dialog_scope.focus();
     }
 }

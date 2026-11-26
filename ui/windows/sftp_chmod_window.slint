@@ -8,7 +8,7 @@
 // 一窗一条提交/关闭栏：Cancel | Apply（无打字确认词）。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
+import { WinButton, WinCheckBox, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
@@ -57,11 +57,15 @@ export component SftpChmodWindow inherits Window {
     callback title_drag_requested();
 
     private property <int> mode-value: Math.round(root.mode-text.to-float());
-    private property <bool> mode-valid:
-        root.mode-text != "" && root.mode-value >= 0 && root.mode-value <= 777;
     private property <int> owner-digit: Math.floor(Math.mod(root.mode-value, 1000) / 100);
     private property <int> group-digit: Math.floor(Math.mod(root.mode-value, 100) / 10);
     private property <int> other-digit: Math.mod(root.mode-value, 10);
+    private property <bool> mode-valid:
+        root.mode-text != "" && root.mode-value >= 0 && root.mode-value <= 777
+        && root.owner-digit >= 0 && root.owner-digit <= 7
+        && root.group-digit >= 0 && root.group-digit <= 7
+        && root.other-digit >= 0 && root.other-digit <= 7
+        && root.mode-text == "\{root.owner-digit}\{root.group-digit}\{root.other-digit}";
 
     pure function digit-of(read: bool, write: bool, exec: bool) -> int {
         return (read ? 4 : 0) + (write ? 2 : 0) + (exec ? 1 : 0);
@@ -109,149 +113,219 @@ export component SftpChmodWindow inherits Window {
         close-requested => { root.canceled(); }
         title-drag-requested => { root.title_drag_requested(); }
 
-        body := Rectangle {
+        body := FocusScope {
             width: root.body-width;
             height: root.body-height;
-            background: transparent;
+
+            key-pressed(event) => {
+                if (event.text == "\u{001b}") {
+                    root.canceled();
+                    return accept;
+                }
+                return reject;
+            }
 
             VerticalLayout {
                 width: parent.width;
                 height: parent.height;
                 spacing: Theme.form-row-gap;
 
-                FormRow {
-                    label: @tr("Path");
+                // 内容区可滚动：compact 560×340 下权限表与错误提示不会把 Cancel | Apply 页脚挤出窗口。
+                Rectangle {
+                    vertical-stretch: 1;
+                    min-height: 0px;
+                    clip: true;
+                    background: transparent;
 
-                    WinTextInput {
-                        width: Theme.form-field-width;
-                        text: root.path-text;
-                        font-family: Theme.font-mono;
-                        font-size: Theme.font-caption;
-                        read-only: true;
+                    form_scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: form_layout.preferred-height;
+
+                        form_layout := VerticalLayout {
+                            width: parent.width;
+                            spacing: Theme.form-row-gap;
+                            alignment: start;
+
+                            FormRow {
+                                label: @tr("Path");
+
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    max-width: Theme.form-field-width;
+                                    text: root.path-text;
+                                    font-family: Theme.font-mono;
+                                    font-size: Theme.font-caption;
+                                    read-only: true;
+                                }
+                            }
+
+                            FormRow {
+                                label: @tr("Mode");
+
+                                WinTextInput {
+                                    width: Theme.form-port-width;
+                                    text <=> root.mode-text;
+                                    placeholder-text: "644";
+                                    edited => { root.update-mode(self.text); }
+                                    accepted => {
+                                        if (root.mode-valid && root.path-text != "") {
+                                            root.applied();
+                                        }
+                                    }
+                                    cancelled => { root.canceled(); }
+                                }
+                            }
+
+                            FormHint {
+                                text: @tr("Octal, e.g. 755. Changes sync with the checkboxes.");
+                            }
+
+                            // --- Permissions: Owner / Group / Other × Read / Write / Execute --
+                            GridLayout {
+                                width: min(420px, parent.width);
+                                spacing: Theme.spacing-4;
+
+                                Text { row: 0; col: 0; text: ""; height: Theme.control-height; }
+                                PermissionHeader { row: 0; col: 1; text: @tr("Owner"); }
+                                PermissionHeader { row: 0; col: 2; text: @tr("Group"); }
+                                PermissionHeader { row: 0; col: 3; text: @tr("Other"); }
+
+                                Text {
+                                    row: 1;
+                                    col: 0;
+                                    text: @tr("Read");
+                                    color: Theme.text-secondary;
+                                    font-size: Theme.font-body;
+                                    vertical-alignment: center;
+                                    height: Theme.control-height;
+                                }
+                                HorizontalLayout {
+                                    row: 1; col: 1;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.owner-read;
+                                        accessible-name: @tr("Owner read");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 1; col: 2;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.group-read;
+                                        accessible-name: @tr("Group read");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 1; col: 3;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.other-read;
+                                        accessible-name: @tr("Other read");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+
+                                Text {
+                                    row: 2;
+                                    col: 0;
+                                    text: @tr("Write");
+                                    color: Theme.text-secondary;
+                                    font-size: Theme.font-body;
+                                    vertical-alignment: center;
+                                    height: Theme.control-height;
+                                }
+                                HorizontalLayout {
+                                    row: 2; col: 1;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.owner-write;
+                                        accessible-name: @tr("Owner write");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 2; col: 2;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.group-write;
+                                        accessible-name: @tr("Group write");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 2; col: 3;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.other-write;
+                                        accessible-name: @tr("Other write");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+
+                                Text {
+                                    row: 3;
+                                    col: 0;
+                                    text: @tr("Execute");
+                                    color: Theme.text-secondary;
+                                    font-size: Theme.font-body;
+                                    vertical-alignment: center;
+                                    height: Theme.control-height;
+                                }
+                                HorizontalLayout {
+                                    row: 3; col: 1;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.owner-exec;
+                                        accessible-name: @tr("Owner execute");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 3; col: 2;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.group-exec;
+                                        accessible-name: @tr("Group execute");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    row: 3; col: 3;
+                                    alignment: center;
+                                    WinCheckBox {
+                                        checked <=> root.other-exec;
+                                        accessible-name: @tr("Other execute");
+                                        toggled => { root.sync-to-mode(); }
+                                    }
+                                }
+                            }
+
+                            if !root.mode-valid : FormHint {
+                                text: @tr("Mode must be three octal digits, e.g. 755.");
+                                hint-color: Theme.critical;
+                            }
+
+                            if root.error-text != "" : FormHint {
+                                text: root.error-text;
+                                hint-color: Theme.critical;
+                            }
+                        }
+                    }
+
+                    WinScrollIndicator {
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: form_scroll.content-y;
+                        content-extent: form_scroll.content-height;
+                        viewport-extent: form_scroll.height;
                     }
                 }
-
-                FormRow {
-                    label: @tr("Mode");
-
-                    WinTextInput {
-                        width: Theme.form-port-width;
-                        text <=> root.mode-text;
-                        placeholder-text: "644";
-                        edited => { root.update-mode(self.text); }
-                    }
-                }
-
-                FormHint {
-                    text: @tr("Octal, e.g. 755. Changes sync with the checkboxes.");
-                }
-
-                // --- Permissions: Owner / Group / Other × Read / Write / Execute --
-                GridLayout {
-                    width: 420px;
-                    spacing: Theme.spacing-4;
-
-                    Text { row: 0; col: 0; text: ""; height: Theme.control-height; }
-                    PermissionHeader { row: 0; col: 1; text: @tr("Owner"); }
-                    PermissionHeader { row: 0; col: 2; text: @tr("Group"); }
-                    PermissionHeader { row: 0; col: 3; text: @tr("Other"); }
-
-                    Text {
-                        row: 1;
-                        col: 0;
-                        text: @tr("Read");
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        height: Theme.control-height;
-                    }
-                    WinCheckBox {
-                        row: 1; col: 1;
-                        checked <=> root.owner-read;
-                        accessible-name: @tr("Owner read");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 1; col: 2;
-                        checked <=> root.group-read;
-                        accessible-name: @tr("Group read");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 1; col: 3;
-                        checked <=> root.other-read;
-                        accessible-name: @tr("Other read");
-                        toggled => { root.sync-to-mode(); }
-                    }
-
-                    Text {
-                        row: 2;
-                        col: 0;
-                        text: @tr("Write");
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        height: Theme.control-height;
-                    }
-                    WinCheckBox {
-                        row: 2; col: 1;
-                        checked <=> root.owner-write;
-                        accessible-name: @tr("Owner write");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 2; col: 2;
-                        checked <=> root.group-write;
-                        accessible-name: @tr("Group write");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 2; col: 3;
-                        checked <=> root.other-write;
-                        accessible-name: @tr("Other write");
-                        toggled => { root.sync-to-mode(); }
-                    }
-
-                    Text {
-                        row: 3;
-                        col: 0;
-                        text: @tr("Execute");
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        height: Theme.control-height;
-                    }
-                    WinCheckBox {
-                        row: 3; col: 1;
-                        checked <=> root.owner-exec;
-                        accessible-name: @tr("Owner execute");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 3; col: 2;
-                        checked <=> root.group-exec;
-                        accessible-name: @tr("Group execute");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                    WinCheckBox {
-                        row: 3; col: 3;
-                        checked <=> root.other-exec;
-                        accessible-name: @tr("Other execute");
-                        toggled => { root.sync-to-mode(); }
-                    }
-                }
-
-                if !root.mode-valid : FormHint {
-                    text: @tr("Mode must be three octal digits, e.g. 755.");
-                    hint-color: Theme.critical;
-                }
-
-                if root.error-text != "" : FormHint {
-                    text: root.error-text;
-                    hint-color: Theme.critical;
-                }
-
-                Rectangle { vertical-stretch: 1; }
 
                 Rectangle {
                     height: 1px;
@@ -285,7 +359,12 @@ export component SftpChmodWindow inherits Window {
         root.sync-from-mode();
     }
 
+    public function focus-dialog() {
+        body.focus();
+    }
+
     init => {
         root.sync-from-mode();
+        root.focus-dialog();
     }
 }

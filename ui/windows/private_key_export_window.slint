@@ -101,6 +101,7 @@ export component PrivateKeyExportWindow inherits Window {
 
                 HorizontalLayout {
                     horizontal-stretch: 1;
+                    max-width: Theme.form-field-width;
                     spacing: Theme.spacing-8;
 
                     WinTextInput {
@@ -114,6 +115,7 @@ export component PrivateKeyExportWindow inherits Window {
 
                     WinIconButton {
                         icon: "file";
+                        bordered: true;
                         accessible-name: @tr("Browse");
                         tooltip-text: @tr("Browse");
                         clicked => { root.browse-file(); }

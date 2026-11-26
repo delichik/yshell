@@ -5,7 +5,7 @@
 // 一窗一条提交/关闭栏：Cancel | Import。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinMethodSeg } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
@@ -62,22 +62,11 @@ export component PrivateKeyImportWindow inherits Window {
             height: root.body-height;
             spacing: Theme.spacing-12;
 
-            // 两个 tab 互跳（原型 linkish 文案的按钮化实现）。
-            HorizontalLayout {
-                vertical-stretch: 0;
-                spacing: Theme.spacing-8;
-
-                WinButton {
-                    text: @tr("From file");
-                    accent: root.tab == 0;
-                    clicked => { root.select-tab(0); }
-                }
-
-                WinButton {
-                    text: @tr("Paste key");
-                    accent: root.tab == 1;
-                    clicked => { root.select-tab(1); }
-                }
+            // 两个 tab 互跳（WinMethodSeg 共享分段控件，避免同屏双 Accent）。
+            WinMethodSeg {
+                labels: [@tr("From file"), @tr("Paste key")];
+                selected-index: root.tab;
+                selected(index) => { root.select-tab(index); }
             }
 
             Rectangle {
@@ -111,6 +100,7 @@ export component PrivateKeyImportWindow inherits Window {
 
                             HorizontalLayout {
                                 horizontal-stretch: 1;
+                                max-width: Theme.form-field-width;
                                 spacing: Theme.spacing-8;
 
                                 WinTextInput {
@@ -124,6 +114,7 @@ export component PrivateKeyImportWindow inherits Window {
 
                                 WinIconButton {
                                     icon: "file";
+                                    bordered: true;
                                     accessible-name: @tr("Browse");
                                     tooltip-text: @tr("Browse");
                                     clicked => { root.browse-file(); }

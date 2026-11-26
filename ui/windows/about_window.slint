@@ -111,7 +111,8 @@ export component AboutWindow inherits Window {
 
                     WinButton {
                         text: @tr("Open source licenses");
-                        icon: root.licenses-open ? "chevron-down" : "chevron-right";
+                        icon: "chevron-right";
+                        icon-rotation: root.licenses-open ? 90deg : 0deg;
                         tooltip-text: @tr("Open source licenses");
                         clicked => { root.licenses-open = !root.licenses-open; }
                     }
@@ -203,7 +204,11 @@ export component AboutWindow inherits Window {
         }
     }
 
-    init => {
+    public function focus-dialog() {
         dialog_scope.focus();
+    }
+
+    init => {
+        root.focus-dialog();
     }
 }

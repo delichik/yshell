@@ -41,40 +41,57 @@ export component KnownHostImportWindow inherits Window {
     private property <length> body-height:
         Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
-    ToolWindowChrome {
+    dialog_scope := FocusScope {
         width: Theme.tool-window-width-compact;
         height: Theme.tool-window-height-compact;
-        title-text: @tr("Import Known Hosts");
-        native-title-drag: root.native_title_drag;
-        close-requested => { root.canceled(); }
-        title-drag-requested => { root.title_drag_requested(); }
-
-        VerticalLayout {
-            width: root.body-width;
-            height: root.body-height;
-            spacing: Theme.form-row-gap;
-
-            // 单字段子窗：无 label、无缩进，控件顶满内容区。
-            HorizontalLayout {
-                spacing: Theme.spacing-8;
-                cross-axis-alignment: center;
-
-                WinTextInput {
-                    horizontal-stretch: 1;
-                    text <=> root.path-text;
-                    placeholder-text: @tr("Path to known_hosts file");
-                    font-family: Theme.font-mono;
-                    font-size: Theme.font-caption;
-                    edited => { root.update-path(self.text); }
-                }
-
-                WinIconButton {
-                    icon: "file";
-                    accessible-name: @tr("Browse");
-                    tooltip-text: @tr("Browse");
-                    clicked => { root.browse-file(); }
-                }
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
             }
+            return reject;
+        }
+
+        ToolWindowChrome {
+            width: Theme.tool-window-width-compact;
+            height: Theme.tool-window-height-compact;
+            title-text: @tr("Import Known Hosts");
+            native-title-drag: root.native_title_drag;
+            close-requested => { root.canceled(); }
+            title-drag-requested => { root.title_drag_requested(); }
+
+            VerticalLayout {
+                width: root.body-width;
+                height: root.body-height;
+                spacing: Theme.form-row-gap;
+
+                // 单字段子窗：无 label、无缩进，控件顶满内容区。
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    cross-axis-alignment: center;
+
+                    WinTextInput {
+                        horizontal-stretch: 1;
+                        text <=> root.path-text;
+                        placeholder-text: @tr("Path to known_hosts file");
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-caption;
+                        edited => { root.update-path(self.text); }
+                        accepted => {
+                            if (root.path-text != "") {
+                                root.imported();
+                            }
+                        }
+                    }
+
+                    WinIconButton {
+                        icon: "file";
+                        bordered: true;
+                        accessible-name: @tr("Browse");
+                        tooltip-text: @tr("Browse");
+                        clicked => { root.browse-file(); }
+                    }
+                }
 
             if root.error-text != "" : FormHint {
                 text: root.error-text;
@@ -108,5 +125,14 @@ export component KnownHostImportWindow inherits Window {
                 }
             }
         }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    init => {
+        root.focus-dialog();
     }
 }

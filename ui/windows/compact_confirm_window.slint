@@ -7,7 +7,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
+import { WinButton, WinCheckBox, WinScrollIndicator } from "../components/basic/controls.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component CompactConfirmWindow inherits Window {
@@ -107,73 +107,97 @@ export component CompactConfirmWindow inherits Window {
             title-drag-requested => { root.title_drag_requested(); }
 
             // --- Body: what will happen ------------------------------------
-            HorizontalLayout {
-                spacing: Theme.spacing-12;
-                alignment: start;
-
-                if root.is-dangerous : Rectangle {
-                    width: Theme.icon-size-large;
-                    height: Theme.icon-size-large;
-                    background: transparent;
-
-                    Icon {
-                        name: "warning";
-                        icon-color: Theme.critical;
-                        icon-size: Theme.icon-size-large;
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
-                    }
-                }
-
-                Text {
-                    text: root.display-message();
-                    color: root.is-dangerous ? Theme.critical : Theme.text-primary;
-                    font-size: Theme.font-body;
-                    font-weight: root.is-dangerous ? Theme.weight-semibold : 400;
-                    wrap: word-wrap;
-                    horizontal-stretch: 1;
-                    vertical-alignment: top;
-                }
-            }
-
-            // --- Consequences list (close tab / quit) -----------------------
-            if root.details.length > 0 : VerticalLayout {
-                spacing: Theme.spacing-8;
-                vertical-stretch: 0;
-
-                for line in root.details : HorizontalLayout {
-                    spacing: Theme.spacing-8;
-                    alignment: start;
-                    cross-axis-alignment: start;
-
-                    Text {
-                        text: "•";
-                        color: root.is-dangerous ? Theme.critical : Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: top;
-                    }
-
-                    Text {
-                        text: line;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-body;
-                        horizontal-stretch: 1;
-                        wrap: word-wrap;
-                    }
-                }
-            }
-
-            if root.note-text != "" : Text {
-                text: root.note-text;
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
-            }
-
             Rectangle {
                 vertical-stretch: 1;
-                min-height: Theme.spacing-16;
+                min-height: 0px;
+                clip: true;
                 background: transparent;
+
+                body_scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: body_content.preferred-height;
+
+                    body_content := VerticalLayout {
+                        width: parent.width;
+                        spacing: Theme.spacing-12;
+                        alignment: start;
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-12;
+                            alignment: start;
+
+                            if root.is-dangerous : Rectangle {
+                                width: Theme.icon-size-large;
+                                height: Theme.icon-size-large;
+                                background: transparent;
+
+                                Icon {
+                                    name: "warning";
+                                    icon-color: Theme.critical;
+                                    icon-size: Theme.icon-size-large;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                            }
+
+                            Text {
+                                text: root.display-message();
+                                color: root.is-dangerous ? Theme.critical : Theme.text-primary;
+                                font-size: Theme.font-body;
+                                font-weight: root.is-dangerous ? Theme.weight-semibold : 400;
+                                wrap: word-wrap;
+                                horizontal-stretch: 1;
+                                vertical-alignment: top;
+                            }
+                        }
+
+                        // --- Consequences list (close tab / quit) -----------------------
+                        if root.details.length > 0 : VerticalLayout {
+                            spacing: Theme.spacing-8;
+                            vertical-stretch: 0;
+
+                            for line in root.details : HorizontalLayout {
+                                spacing: Theme.spacing-8;
+                                alignment: start;
+                                cross-axis-alignment: start;
+
+                                Text {
+                                    text: "•";
+                                    color: root.is-dangerous ? Theme.critical : Theme.text-secondary;
+                                    font-size: Theme.font-body;
+                                    vertical-alignment: top;
+                                }
+
+                                Text {
+                                    text: line;
+                                    color: Theme.text-primary;
+                                    font-size: Theme.font-body;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+
+                        if root.note-text != "" : Text {
+                            text: root.note-text;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: max(0px, parent.height - 2 * Theme.spacing-4);
+                    viewport-position: body_scroll.content-y;
+                    content-extent: body_scroll.content-height;
+                    viewport-extent: body_scroll.height;
+                }
             }
 
             // --- Footer ----------------------------------------------------
@@ -184,7 +208,7 @@ export component CompactConfirmWindow inherits Window {
             }
 
             HorizontalLayout {
-                alignment: end;
+                alignment: stretch;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
                 padding-top: Theme.spacing-4;

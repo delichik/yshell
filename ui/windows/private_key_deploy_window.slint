@@ -43,13 +43,24 @@ export component PrivateKeyDeployWindow inherits Window {
     private property <length> body-height:
         Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
-    ToolWindowChrome {
+    dialog_scope := FocusScope {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        title-text: @tr("Deploy {0}", root.key-label-text);
-        native-title-drag: root.native_title_drag;
-        close-requested => { root.canceled(); }
-        title-drag-requested => { root.title_drag_requested(); }
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+
+        ToolWindowChrome {
+            width: Theme.tool-window-width-standard;
+            height: Theme.tool-window-height-standard;
+            title-text: @tr("Deploy {0}", root.key-label-text);
+            native-title-drag: root.native_title_drag;
+            close-requested => { root.canceled(); }
+            title-drag-requested => { root.title_drag_requested(); }
 
         VerticalLayout {
             width: root.body-width;
@@ -148,5 +159,14 @@ export component PrivateKeyDeployWindow inherits Window {
                 }
             }
         }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    init => {
+        root.focus-dialog();
     }
 }
