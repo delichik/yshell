@@ -23,10 +23,15 @@ component ThemeColorSwatch inherits Rectangle {
     height: 28px;
     border-radius: 4px;
     border-width: 1px;
-    border-color: Theme.control-stroke;
+    border-color: !root.enabled ? Theme.control-stroke
+        : swatch_touch.has-hover ? Theme.text-secondary
+        : Theme.control-stroke;
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
     background: root.fill;
+    opacity: swatch_touch.pressed && root.enabled ? 0.85 : 1.0;
+    animate opacity { duration: Theme.duration-faster; easing: ease-out; }
 
-    TouchArea {
+    swatch_touch := TouchArea {
         enabled: root.enabled;
         clicked => { picker.show(); }
     }
@@ -40,9 +45,12 @@ component ThemeColorSwatch inherits Rectangle {
 
         Rectangle {
             background: Theme.flyout-background;
-            border-radius: Theme.radius-control;
+            border-radius: Theme.radius-panel;
             border-width: 1px;
-            border-color: Theme.control-stroke;
+            border-color: Theme.card-stroke;
+            drop-shadow-blur: Theme.shadow-blur;
+            drop-shadow-color: Theme.shadow-color;
+            drop-shadow-offset-y: Theme.shadow-offset-y;
 
             VerticalLayout {
                 padding: Theme.spacing-8;
@@ -92,7 +100,6 @@ export component ThemeEditor inherits VerticalLayout {
     callback update-ansi(int, string);
 
     spacing: Theme.form-row-gap;
-    padding: Theme.spacing-12;
 
     Text {
         text: root.builtin ? @tr("Theme (read-only)") : @tr("Edit theme");
@@ -205,15 +212,15 @@ export component ThemeEditor inherits VerticalLayout {
             clicked => { root.clone-theme(); }
         }
 
+        WinButton {
+            text: root.builtin ? @tr("Close") : @tr("Discard Changes");
+            clicked => { root.close(); }
+        }
+
         if !root.builtin : WinButton {
             text: @tr("Save Theme");
             accent: true;
             clicked => { root.save(); }
-        }
-
-        WinButton {
-            text: root.builtin ? @tr("Close") : @tr("Discard Changes");
-            clicked => { root.close(); }
         }
     }
 }

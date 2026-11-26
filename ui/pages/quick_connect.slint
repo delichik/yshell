@@ -139,12 +139,14 @@ component QuickConnectRowItem inherits Rectangle {
             WinIconButton {
                 icon: "connect";
                 accessible-name: @tr("Connect");
+                tooltip-text: @tr("Connect");
                 clicked => { root.connect(); }
             }
 
             WinIconButton {
                 icon: "copy";
                 accessible-name: @tr("Copy target");
+                tooltip-text: @tr("Copy target");
                 clicked => { root.copy(); }
             }
         }
@@ -263,6 +265,7 @@ export component QuickConnectPage inherits Rectangle {
                     if root.input-text != "" : WinIconButton {
                         icon: "close";
                         accessible-name: @tr("Clear target");
+                        tooltip-text: @tr("Clear target");
                         clicked => {
                             root.input-text = "";
                             root.clear-input();

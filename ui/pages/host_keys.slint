@@ -53,13 +53,15 @@ component HostKeyListItem inherits Rectangle {
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     Rectangle {
-        visible: root.selected;
         x: 4px;
-        y: (parent.height - 16px) / 2;
+        y: (parent.height - self.height) / 2;
         width: 3px;
-        height: 16px;
+        height: root.selected ? 16px : 6px;
+        opacity: root.selected ? 1.0 : 0.0;
         border-radius: 2px;
         background: Theme.accent;
+        animate opacity { duration: Theme.duration-fast; easing: ease-out; }
+        animate height { duration: Theme.duration-fast; easing: ease-out; }
     }
 
     VerticalLayout {
@@ -82,11 +84,18 @@ component HostKeyListItem inherits Rectangle {
         Text {
             text: root.node.fingerprint;
             color: Theme.text-secondary;
-            font-size: 11px;
+            font-size: Theme.font-caption;
             font-family: Theme.font-mono;
             wrap: no-wrap;
             overflow: elide;
         }
+    }
+
+    Rectangle {
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Theme.layer-stroke;
     }
 
     touch := TouchArea {
@@ -99,40 +108,6 @@ component HostKeyListItem inherits Rectangle {
                 );
             }
         }
-    }
-}
-
-// 删除类图标钮（红描边 + 图标随 critical 色；与文字 Delete 同套危险语义）。
-component DangerIconButton inherits Rectangle {
-    in property <string> tooltip: "";
-    in property <bool> enabled: true;
-    callback clicked();
-
-    width: Theme.control-height;
-    height: Theme.control-height;
-    border-radius: Theme.radius-control;
-    border-width: 1px;
-    border-color: root.enabled ? Theme.critical : Theme.control-stroke;
-    background: touch.pressed ? Theme.subtle-pressed
-        : touch.has-hover ? Theme.subtle-hover
-        : transparent;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
-
-    Icon {
-        name: "trash";
-        icon-color: root.enabled ? Theme.critical : Theme.text-disabled;
-        icon-size: Theme.icon-size;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => { root.clicked(); }
-    }
-
-    if root.tooltip != "" : Tooltip {
-        text: @markdown("\{root.tooltip}");
     }
 }
 
@@ -222,6 +197,7 @@ export component HostKeysPage inherits Rectangle {
             enabled: true,
             checked: false,
             separator: false,
+            danger: true,
         },
     ];
     private property <[MenuEntry]> blank-menu-entries: [
@@ -245,6 +221,7 @@ export component HostKeysPage inherits Rectangle {
             enabled: root.groups.length > 0,
             checked: false,
             separator: false,
+            danger: true,
         },
     ];
 
@@ -308,8 +285,11 @@ export component HostKeysPage inherits Rectangle {
                 }
 
                 // Clear All：原型主路径是清单空白右键；工具条保留图标入口以免有内容时发现不了。
-                DangerIconButton {
-                    tooltip: @tr("Clear all host keys");
+                WinIconButton {
+                    icon: "trash";
+                    critical: true;
+                    accessible-name: @tr("Clear All");
+                    tooltip-text: @tr("Clear all host keys");
                     enabled: root.groups.length > 0;
                     clicked => { root.request-clear-all(); }
                 }

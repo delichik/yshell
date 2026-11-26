@@ -74,13 +74,16 @@ component ThemeListRow inherits Rectangle {
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // 选中标记：原型 left 4 · 3×16 居中。
-    if root.selected : Rectangle {
+    Rectangle {
         x: 4px;
-        y: (parent.height - 16px) / 2;
+        y: (parent.height - self.height) / 2;
         width: 3px;
-        height: 16px;
+        height: root.selected ? 16px : 6px;
+        opacity: root.selected ? 1.0 : 0.0;
         border-radius: 2px;
         background: Theme.accent;
+        animate opacity { duration: Theme.duration-fast; easing: ease-out; }
+        animate height { duration: Theme.duration-fast; easing: ease-out; }
     }
 
     VerticalLayout {
@@ -261,7 +264,7 @@ export component ThemeManagerPage inherits Rectangle {
                 accent: true;
                 accessible-name: @tr("New style");
                 tooltip-text: @tr("New style");
-                enabled: !root.theme-editor-open;
+                enabled: !root.theme-editor-open || root.theme-editor-builtin;
                 clicked => {
                     root.new-style();
                 }
@@ -359,7 +362,7 @@ export component ThemeManagerPage inherits Rectangle {
                         vertical-stretch: 0;
                         frame: root.preview;
                         surface-background: root.preview-background;
-                        surface-height: 120px;
+                        surface-height: Theme.terminal-preview-height;
                     }
 
                     Rectangle {
@@ -526,7 +529,7 @@ export component ThemeManagerPage inherits Rectangle {
 
             WinButton {
                 text: @tr("Set as Default");
-                enabled: root.has-selection && !root.selected-is-default && !root.theme-editor-open;
+                enabled: root.has-selection && !root.selected-is-default && (!root.theme-editor-open || root.theme-editor-builtin);
                 clicked => { root.set-default-theme(); }
             }
 

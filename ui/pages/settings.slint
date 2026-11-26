@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinIconButton, WinMethodSeg, WinNavItem, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
 import { FormGroupLabel, FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
@@ -64,30 +64,7 @@ component SettingsActionButton inherits Rectangle {
     }
 }
 
-// Mode 分段控件的一项（System / Light / Dark；也可做单项禁用占位）。
-component SettingsMethodButton inherits Rectangle {
-    in property <string> text: "";
-    in property <string> hint: "";
-    in property <bool> selected: false;
-    in property <bool> enabled: true;
-    callback clicked();
-
-    height: Theme.control-height;
-    width: max(96px, method.preferred-width);
-
-    method := WinButton {
-        width: parent.width;
-        height: parent.height;
-        text: root.text;
-        accent: root.selected;
-        enabled: root.enabled;
-        clicked => { root.clicked(); }
-    }
-
-    if root.hint != "" : Tooltip {
-        text: @markdown("\{root.hint}");
-    }
-}
+// Mode 分段控件的一项（已由共享 WinMethodSeg 替代）。
 
 // 强调色色板：Follow system + 6 预设；选中项加粗描边（原型 `aria-pressed` 态）。
 // Follow system 用半白半黑渐变（原型 `.accent-system`），与 Blue 实色区分。
@@ -103,13 +80,18 @@ component AccentSwatch inherits Rectangle {
     height: Theme.control-height;
     border-radius: Theme.radius-control;
     border-width: root.selected ? 2px : 1px;
-    border-color: root.selected ? Theme.text-primary : Theme.control-stroke;
+    border-color: root.selected ? Theme.text-primary
+        : swatch_touch.has-hover ? Theme.text-secondary
+        : Theme.control-stroke;
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
     background: root.follow-system
         ? @linear-gradient(90deg, Theme.follow-system-swatch-light 0%, Theme.follow-system-swatch-light 50%, Theme.follow-system-swatch-dark 50%, Theme.follow-system-swatch-dark 100%)
         : root.swatch;
+    opacity: swatch_touch.pressed ? 0.85 : 1.0;
+    animate opacity { duration: Theme.duration-faster; easing: ease-out; }
     clip: true;
 
-    TouchArea {
+    swatch_touch := TouchArea {
         clicked => { root.clicked(); }
     }
 
@@ -128,7 +110,10 @@ component SettingsManagerRow inherits Rectangle {
     callback clicked();
 
     height: Theme.control-height * 2;
-    background: touch.has-hover ? Theme.subtle-hover : transparent;
+    background: touch.pressed ? Theme.subtle-pressed
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     HorizontalLayout {
         padding-left: Theme.spacing-12;
@@ -544,27 +529,10 @@ export component SettingsDialog inherits Rectangle {
 
                                     FormRow {
                                         label: @tr("Mode");
-                                        HorizontalLayout {
-                                            spacing: Theme.spacing-8;
-                                            alignment: start;
-                                            SettingsMethodButton {
-                                                text: @tr("System");
-                                                hint: @tr("Follow system");
-                                                selected: root.settings-appearance-mode-index == 0;
-                                                clicked => { root.update-settings-appearance-mode(0); }
-                                            }
-                                            SettingsMethodButton {
-                                                text: @tr("Light");
-                                                hint: @tr("Light");
-                                                selected: root.settings-appearance-mode-index == 1;
-                                                clicked => { root.update-settings-appearance-mode(1); }
-                                            }
-                                            SettingsMethodButton {
-                                                text: @tr("Dark");
-                                                hint: @tr("Dark");
-                                                selected: root.settings-appearance-mode-index == 2;
-                                                clicked => { root.update-settings-appearance-mode(2); }
-                                            }
+                                        WinMethodSeg {
+                                            labels: [@tr("System"), @tr("Light"), @tr("Dark")];
+                                            selected-index: root.settings-appearance-mode-index;
+                                            selected(index) => { root.update-settings-appearance-mode(index); }
                                         }
                                     }
                                     FormHint {
@@ -610,6 +578,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                         WinIconButton {
                                             icon: "settings";
+                                            bordered: true;
                                             tooltip-text: @tr("Manage terminal styles");
                                             accessible-name: @tr("Manage terminal styles");
                                             clicked => { root.open-theme-manager(); }
@@ -802,11 +771,14 @@ export component SettingsDialog inherits Rectangle {
                                                     HorizontalLayout {
                                                         padding-left: Theme.spacing-8;
                                                         padding-right: Theme.spacing-8;
+                                                        padding-top: 2px;
+                                                        padding-bottom: 2px;
                                                         Text {
                                                             text: TextFormats.master-password-status(root.settings-master-password-set);
                                                             color: Theme.text-primary;
                                                             font-size: Theme.font-caption;
                                                             font-weight: Theme.weight-semibold;
+                                                            vertical-alignment: center;
                                                         }
                                                     }
                                                 }
@@ -881,6 +853,7 @@ export component SettingsDialog inherits Rectangle {
                                         border-radius: Theme.radius-panel;
                                         border-width: 1px;
                                         border-color: Theme.card-stroke;
+                                        clip: true;
 
                                         VerticalLayout {
                                             alignment: start;
@@ -973,7 +946,7 @@ export component SettingsDialog inherits Rectangle {
                                     if root.settings-sftp-editor-custom-visible : FormRow {
                                         label: "";
                                         WinTextInput {
-                                            max-width: 388px;
+                                            max-width: Theme.form-field-width - Theme.control-height - Theme.spacing-8;
                                             horizontal-stretch: 1;
                                             text <=> root.settings-sftp-editor-path-text;
                                             placeholder-text: @tr("Path to editor executable");
@@ -983,6 +956,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                         WinIconButton {
                                             icon: "folder";
+                                            bordered: true;
                                             tooltip-text: @tr("Browse");
                                             accessible-name: @tr("Browse");
                                             clicked => { root.browse-settings-sftp-external-editor(); }
@@ -1034,22 +1008,11 @@ export component SettingsDialog inherits Rectangle {
 
                                     FormRow {
                                         label: @tr("Listen");
-                                        HorizontalLayout {
-                                            spacing: Theme.spacing-8;
-                                            SettingsMethodButton {
-                                                text: @tr("Local");
-                                                hint: @tr("Local = 127.0.0.1");
-                                                selected: !root.mcp-listen-lan;
-                                                enabled: root.mcp-enabled;
-                                                clicked => { root.set-mcp-listen-lan(false); }
-                                            }
-                                            SettingsMethodButton {
-                                                text: @tr("LAN");
-                                                hint: @tr("LAN = 0.0.0.0; API key recommended");
-                                                selected: root.mcp-listen-lan;
-                                                enabled: root.mcp-enabled;
-                                                clicked => { root.set-mcp-listen-lan(true); }
-                                            }
+                                        WinMethodSeg {
+                                            enabled: root.mcp-enabled;
+                                            labels: [@tr("Local"), @tr("LAN")];
+                                            selected-index: root.mcp-listen-lan ? 1 : 0;
+                                            selected(index) => { root.set-mcp-listen-lan(index == 1); }
                                         }
                                     }
                                     FormHint {
@@ -1073,6 +1036,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                             WinIconButton {
                                                 icon: "refresh";
+                                                bordered: true;
                                                 enabled: root.mcp-enabled;
                                                 accessible-name: @tr("Generate");
                                                 tooltip-text: @tr("Generate");
@@ -1080,6 +1044,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                             WinIconButton {
                                                 icon: "copy";
+                                                bordered: true;
                                                 enabled: root.mcp-enabled && root.mcp-api-key-text != "";
                                                 accessible-name: @tr("Copy");
                                                 tooltip-text: @tr("Copy");
@@ -1191,6 +1156,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                             WinIconButton {
                                                 icon: "folder";
+                                                bordered: true;
                                                 tooltip-text: @tr("Open debug log folder");
                                                 accessible-name: @tr("Open debug log folder");
                                                 clicked => { root.open-debug-log-dir(); }
@@ -1204,13 +1170,14 @@ export component SettingsDialog inherits Rectangle {
                                     FormRow {
                                         label: @tr("Config directory");
                                         WinTextInput {
-                                            max-width: 388px;
+                                            max-width: Theme.form-field-width - Theme.control-height - Theme.spacing-8;
                                             horizontal-stretch: 1;
                                             read-only: true;
                                             text: root.config-dir-text;
                                         }
                                         WinIconButton {
                                             icon: "folder";
+                                            bordered: true;
                                             tooltip-text: @tr("Open config directory");
                                             accessible-name: @tr("Open config directory");
                                             clicked => { root.open-config-dir(); }

@@ -49,13 +49,15 @@ component PrivateKeyListItem inherits Rectangle {
 
     // 原型 `.key-row` 选中轨：left 4 · 3×16
     Rectangle {
-        visible: root.selected;
         x: 4px;
-        y: (parent.height - 16px) / 2;
+        y: (parent.height - self.height) / 2;
         width: 3px;
-        height: 16px;
+        height: root.selected ? 16px : 6px;
+        opacity: root.selected ? 1.0 : 0.0;
         border-radius: 2px;
         background: Theme.accent;
+        animate opacity { duration: Theme.duration-fast; easing: ease-out; }
+        animate height { duration: Theme.duration-fast; easing: ease-out; }
     }
 
     VerticalLayout {
@@ -79,11 +81,18 @@ component PrivateKeyListItem inherits Rectangle {
             // 原型 `.key-row small`：只显示指纹摘要（算法进右栏详情）。
             text: node.fingerprint;
             color: Theme.text-tertiary;
-            font-size: 11px;
+            font-size: Theme.font-caption;
             font-family: Theme.font-mono;
             wrap: no-wrap;
             overflow: elide;
         }
+    }
+
+    Rectangle {
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Theme.layer-stroke;
     }
 
     touch := TouchArea {
@@ -216,6 +225,7 @@ export component PrivateKeysPage inherits Rectangle {
             enabled: root.has-selection && !root.busy,
             checked: false,
             separator: false,
+            danger: true,
         },
     ];
 
@@ -457,6 +467,7 @@ export component PrivateKeysPage inherits Rectangle {
 
                                     WinIconButton {
                                         icon: "copy";
+                                        bordered: true;
                                         accessible-name: @tr("Copy public key");
                                         tooltip-text: @tr("Copy public key");
                                         clicked => { root.copy-public-key(); }
@@ -482,6 +493,7 @@ export component PrivateKeysPage inherits Rectangle {
 
                                     WinIconButton {
                                         icon: "clear";
+                                        bordered: true;
                                         accessible-name: @tr("Forget passphrase");
                                         tooltip-text: @tr("Forget passphrase");
                                         enabled: root.passphrase-manage-enabled
