@@ -1389,10 +1389,14 @@ pub fn run_session_worker_ipc(
         return Ok(());
     };
 
-    // I/O loop: Host commands on reader; shell output polled.
+    // I/O loop: Host commands on non-blocking reader; shell output polled.
     reader
         .get_ref()
-        .set_read_timeout(Some(Duration::from_millis(20)))
+        .set_read_timeout(None)
+        .map_err(AppError::from_error)?;
+    reader
+        .get_ref()
+        .set_nonblocking(true)
         .map_err(AppError::from_error)?;
 
     let mut exit_reason: Option<String> = None;
@@ -1406,7 +1410,8 @@ pub fn run_session_worker_ipc(
             tracing::info!(parent_pid, "session worker parent host is gone; exiting");
             break 'io;
         }
-        // Drain host commands (non-blocking via read timeout).
+        let mut did_work = false;
+        // Drain host commands (non-blocking).
         loop {
             match reader.read_line(&mut cmd_line) {
                 Ok(0) => {
@@ -1417,6 +1422,7 @@ pub fn run_session_worker_ipc(
                     return Ok(());
                 }
                 Ok(_) => {
+                    did_work = true;
                     let parsed = serde_json::from_str::<HostToWorker>(cmd_line.trim_end());
                     cmd_line.clear();
                     let Ok(cmd) = parsed else {
@@ -1496,6 +1502,7 @@ pub fn run_session_worker_ipc(
         for _ in 0..64 {
             match shell.poll_output() {
                 Ok(bytes) if !bytes.is_empty() => {
+                    did_work = true;
                     if !first_output_forwarded {
                         first_output_forwarded = true;
                         tracing::debug!(
@@ -1524,7 +1531,9 @@ pub fn run_session_worker_ipc(
                 }
             }
         }
-        thread::sleep(Duration::from_millis(5));
+        if !did_work {
+            thread::sleep(Duration::from_millis(4));
+        }
     }
 
     tracing::info!("session worker exiting");

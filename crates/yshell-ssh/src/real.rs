@@ -527,6 +527,10 @@ const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
 /// dead or half-open TCP connection.
 const NATIVE_SSH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Cap how many bytes a single `poll_output` drain buffers so a fast remote
+/// producer cannot balloon memory or starve control writes like `Ctrl+C`.
+const MAX_DRAIN_BYTES_PER_POLL: usize = 64 * 1024;
+
 fn should_send_keepalive(last_activity: Instant, now: Instant, interval: Duration) -> bool {
     now.saturating_duration_since(last_activity) >= interval
 }
@@ -857,8 +861,11 @@ impl ShellSession for RealShellSessionPlaceholder {
 
     fn poll_output(&mut self) -> SshResult<Vec<u8>> {
         self.refresh_transport_state();
+        if let Some(chunk) = self.pending_output.pop_front() {
+            return Ok(chunk);
+        }
         match &mut self.transport {
-            RealShellTransport::Scaffold => Ok(self.pending_output.pop_front().unwrap_or_default()),
+            RealShellTransport::Scaffold => Ok(Vec::new()),
             RealShellTransport::Native(session) => {
                 session.drain_into(&mut self.pending_output)?;
                 Ok(self.pending_output.pop_front().unwrap_or_default())
@@ -1961,6 +1968,10 @@ impl ShellSession for SshTransportShellSession {
     }
 
     fn poll_output(&mut self) -> SshResult<Vec<u8>> {
+        if let Some(chunk) = self.pending_output.pop_front() {
+            self.last_activity = Instant::now();
+            return Ok(chunk);
+        }
         if self.closed {
             return Ok(Vec::new());
         }
@@ -2604,7 +2615,7 @@ fn drain_read_stream_raw(
     queue: &mut VecDeque<Vec<u8>>,
 ) -> Result<usize, io::Error> {
     let mut total = 0usize;
-    loop {
+    while total < MAX_DRAIN_BYTES_PER_POLL {
         let mut buffer = [0u8; 4096];
         match reader.read(&mut buffer) {
             Ok(0) => break,
@@ -2683,10 +2694,10 @@ mod tests {
 
     use super::{
         classify_native_auth_problem, describe_challenges, describe_channel_read_failure,
-        native_host_key_problem, native_stage_error, session_timeout_ms, should_send_keepalive,
-        ssh2_error_code, strategy_from_attempt, RealAuthStrategy, RealConnectionAttempt,
-        RealConnectionStage, RealSshAdapter, RealTransportActionOutcome,
-        NATIVE_SSH_DISCONNECT_TIMEOUT,
+        drain_read_stream_raw, native_host_key_problem, native_stage_error, session_timeout_ms,
+        should_send_keepalive, ssh2_error_code, strategy_from_attempt, RealAuthStrategy,
+        RealConnectionAttempt, RealConnectionStage, RealSshAdapter, RealTransportActionOutcome,
+        MAX_DRAIN_BYTES_PER_POLL, NATIVE_SSH_DISCONNECT_TIMEOUT,
     };
 
     #[test]
@@ -3613,5 +3624,21 @@ mod tests {
         let timeout_ms = session_timeout_ms(NATIVE_SSH_DISCONNECT_TIMEOUT);
         assert!(timeout_ms > 0);
         assert!(timeout_ms <= 5_000);
+    }
+
+    #[test]
+    fn drain_read_stream_raw_caps_bytes_per_poll() {
+        use std::collections::VecDeque;
+        use std::io::Cursor;
+
+        let payload = vec![b'x'; MAX_DRAIN_BYTES_PER_POLL * 4];
+        let mut cursor = Cursor::new(payload);
+        let mut queue = VecDeque::new();
+
+        let first = drain_read_stream_raw(&mut cursor, &mut queue).expect("first drain");
+        assert_eq!(first, MAX_DRAIN_BYTES_PER_POLL);
+        let drained_bytes: usize = queue.iter().map(Vec::len).sum();
+        assert_eq!(drained_bytes, MAX_DRAIN_BYTES_PER_POLL);
+        assert_eq!(cursor.position() as usize, MAX_DRAIN_BYTES_PER_POLL);
     }
 }
