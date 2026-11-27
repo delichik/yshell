@@ -515,8 +515,8 @@ fn render_terminal_frame(entry: &RemoteWindow, client: &HostShellClient, project
         if let Some(image) = render_wire_snapshot(&entry.renderer, &snapshot) {
             entry.window.set_terminal_image(image);
         }
+        entry.last_frame.set(Some(frame_id));
     }
-    entry.last_frame.set(Some(frame_id));
 }
 
 /// Re-project the window's terminal appearance when its active tab changed.

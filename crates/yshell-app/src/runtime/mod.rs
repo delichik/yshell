@@ -1148,14 +1148,7 @@ impl AppRuntime {
             return;
         }
         if existing.state == yshell_core::SessionState::Failed && existing.shell_session.is_none() {
-            if let Some(reason) = reason {
-                if let Some(session) = self.sessions.get_mut(session_key) {
-                    if session.connection_error.is_empty() {
-                        session.connection_error = reason;
-                        self.mark_ui_dirty();
-                    }
-                }
-            } else if poll_changed {
+            if poll_changed {
                 self.mark_ui_dirty();
             }
             return;

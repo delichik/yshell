@@ -776,12 +776,15 @@ pub fn connect_via_session_worker(
 
     // Auth line from worker.
     let mut auth = String::new();
-    read_line_deadline(
+    if let Err(error) = read_line_deadline(
         &mut reader,
         &mut auth,
         Instant::now() + CONNECT_ACCEPT_TIMEOUT,
         cancel,
-    )?;
+    ) {
+        terminate_child_pid(pid);
+        return Err(error);
+    }
     if auth.trim_end() != token {
         terminate_child_pid(pid);
         return Err(SshError::new(
@@ -790,14 +793,19 @@ pub fn connect_via_session_worker(
         ));
     }
 
-    write_msg(
+    if let Err(error) = write_msg(
         &mut writer,
         &HostToWorker::Connect {
             config: Box::new(WireSshConfig::from(ssh_config)),
             open_shell,
         },
-    )
-    .map_err(|error| SshError::new(SshErrorKind::Configuration, error.to_string()))?;
+    ) {
+        terminate_child_pid(pid);
+        return Err(SshError::new(
+            SshErrorKind::Configuration,
+            error.to_string(),
+        ));
+    }
     tracing::debug!(
         session_id,
         worker_pid = pid,
@@ -1340,7 +1348,9 @@ pub fn run_session_worker_ipc(
             }
         },
     );
-    drop(progress_thread);
+    if let Ok(handle) = progress_thread {
+        let _ = handle.join();
+    }
 
     let (transport, mut shell) = match connect_result {
         Ok(pair) => {
