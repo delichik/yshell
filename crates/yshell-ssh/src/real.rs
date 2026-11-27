@@ -521,6 +521,12 @@ const LIBSSH2_ERROR_EAGAIN: i32 = -37;
 /// Matches common client defaults (OpenSSH `ServerAliveInterval` style).
 const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
 
+/// Upper bound for graceful channel/session close during disconnect.
+/// Interactive shells clear the session timeout to 0 (infinite), so switching
+/// back to blocking mode without a finite timeout can hang indefinitely on a
+/// dead or half-open TCP connection.
+const NATIVE_SSH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+
 fn should_send_keepalive(last_activity: Instant, now: Instant, interval: Duration) -> bool {
     now.saturating_duration_since(last_activity) >= interval
 }
@@ -1683,6 +1689,11 @@ impl RealNativeShellSession {
     }
 
     fn disconnect(&mut self) -> SshResult<()> {
+        if self.closed {
+            return Ok(());
+        }
+        self.session
+            .set_timeout(session_timeout_ms(NATIVE_SSH_DISCONNECT_TIMEOUT));
         self.session.set_blocking(true);
         let close_result = self.channel.close().map_err(|error| {
             SshError::new(
@@ -1914,6 +1925,8 @@ impl SshTransport {
     /// Sends a disconnect message and marks the transport unusable.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.session
+            .set_timeout(session_timeout_ms(NATIVE_SSH_DISCONNECT_TIMEOUT));
         let _ = self.session.disconnect(None, "closed by yshell", None);
     }
 }
@@ -2104,6 +2117,9 @@ impl ShellSession for SshTransportShellSession {
         if self.closed {
             return Ok(());
         }
+        self.transport
+            .session()
+            .set_timeout(session_timeout_ms(NATIVE_SSH_DISCONNECT_TIMEOUT));
         self.transport.session().set_blocking(true);
         let close_result = self.channel.close().map_err(|error| {
             SshError::new(
@@ -2667,9 +2683,10 @@ mod tests {
 
     use super::{
         classify_native_auth_problem, describe_challenges, describe_channel_read_failure,
-        native_host_key_problem, native_stage_error, should_send_keepalive, ssh2_error_code,
-        strategy_from_attempt, RealAuthStrategy, RealConnectionAttempt, RealConnectionStage,
-        RealSshAdapter, RealTransportActionOutcome,
+        native_host_key_problem, native_stage_error, session_timeout_ms, should_send_keepalive,
+        ssh2_error_code, strategy_from_attempt, RealAuthStrategy, RealConnectionAttempt,
+        RealConnectionStage, RealSshAdapter, RealTransportActionOutcome,
+        NATIVE_SSH_DISCONNECT_TIMEOUT,
     };
 
     #[test]
@@ -3589,5 +3606,12 @@ mod tests {
             describe_channel_read_failure("stdout", &io_err, Some("")),
             "failed while reading SSH stdout: transport read"
         );
+    }
+
+    #[test]
+    fn disconnect_timeout_is_bounded_and_nonzero() {
+        let timeout_ms = session_timeout_ms(NATIVE_SSH_DISCONNECT_TIMEOUT);
+        assert!(timeout_ms > 0);
+        assert!(timeout_ms <= 5_000);
     }
 }
