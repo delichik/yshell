@@ -1511,7 +1511,9 @@ impl RealNativeShellSession {
         // servers with ClientAlive) do not silently reset an otherwise healthy
         // session mid-use.
         session.set_timeout(0);
-        session.set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
+        // `want_reply = false`: OpenSSH replies to `want_reply = true` keepalives
+        // with `SSH_MSG_REQUEST_FAILURE` that libssh2's channel read loop does not drain.
+        session.set_keepalive(false, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
         session.set_blocking(false);
         attempt.record_action(
             RealTransportAction::OpenShell,
@@ -1874,8 +1876,9 @@ impl SshTransport {
             return;
         }
         self.session.set_timeout(0);
+        // `want_reply = false`: avoid accumulating unhandled `REQUEST_FAILURE` packets.
         self.session
-            .set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
+            .set_keepalive(false, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
         self.session.set_blocking(false);
     }
 
@@ -1942,8 +1945,9 @@ impl SshTransport {
             )
         })?;
         self.session.set_timeout(0);
+        // `want_reply = false`: avoid accumulating unhandled `REQUEST_FAILURE` packets.
         self.session
-            .set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
+            .set_keepalive(false, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
         self.session.set_blocking(false);
         self.shell_attached.store(true, Ordering::SeqCst);
         notify_connection_stage(RealConnectionStage::Connected);
