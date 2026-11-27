@@ -439,6 +439,12 @@ fn prepare_portable_staging(
     for (source, name) in binaries.iter().zip(target_os.binary_names()) {
         copy_file(source, &staging.join(name), true)?;
     }
+    #[cfg(target_os = "macos")]
+    if *target_os == TargetOs::Macos {
+        for name in target_os.binary_names() {
+            crate::macos_sign::sign_binary(&staging.join(name))?;
+        }
+    }
     copy_file(&root.join("README.md"), &staging.join("README.md"), false)?;
     copy_file(&root.join("LICENSE"), &staging.join("LICENSE"), false)?;
     copy_shipped_fonts(root, &staging.join("fonts"))?;

@@ -482,17 +482,28 @@ fn bundled_font_faces() -> &'static BundledFontFaces {
 
 /// Resolves the directory that holds product-shipped font files.
 ///
-/// Search order: `<exe_dir>/fonts`, `/usr/share/yshell/fonts` (Linux packages),
-/// then the crate's `assets/` folder (dev / unit tests via
-/// `CARGO_MANIFEST_DIR`). The directory is not configurable through environment
-/// variables (application configuration never comes from the environment).
+/// Search order: `<exe_dir>/fonts`, macOS `.app` bundle `../Resources/fonts`
+/// (when the executable is under `Contents/MacOS/`), `/usr/share/gterm/fonts`
+/// and `/usr/share/yshell/fonts` (Linux packages), then the crate's `assets/`
+/// folder (dev / unit tests via `CARGO_MANIFEST_DIR`). The directory is not
+/// configurable through environment variables (application configuration never
+/// comes from the environment).
 #[must_use]
 pub fn resolve_fonts_dir() -> PathBuf {
-    if let Ok(exe) = env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let beside = parent.join("fonts");
-            if beside.is_dir() {
-                return beside;
+    let current = env::current_exe().ok();
+    resolve_fonts_dir_from_exe(current.as_deref())
+}
+
+fn resolve_fonts_dir_from_exe(exe: Option<&Path>) -> PathBuf {
+    if let Some(parent) = exe.and_then(Path::parent) {
+        let beside = parent.join("fonts");
+        if beside.is_dir() {
+            return beside;
+        }
+        if let Some(resources) = macos_bundle_resources_dir(parent) {
+            let bundled = resources.join("fonts");
+            if bundled.is_dir() {
+                return bundled;
             }
         }
     }
@@ -506,6 +517,17 @@ pub fn resolve_fonts_dir() -> PathBuf {
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")
+}
+
+fn macos_bundle_resources_dir(exe_dir: &Path) -> Option<PathBuf> {
+    if exe_dir.file_name() != Some(std::ffi::OsStr::new("MacOS")) {
+        return None;
+    }
+    let contents = exe_dir.parent()?;
+    if contents.file_name() != Some(std::ffi::OsStr::new("Contents")) {
+        return None;
+    }
+    Some(contents.join("Resources"))
 }
 
 impl Default for TerminalFontSet {
@@ -3176,5 +3198,39 @@ mod tests {
         let mut renderer = TerminalRenderer::new();
         let frame = render_lines(&mut renderer, styled_evidence_lines(), Some((0, 7)), None);
         write_frame_evidence("w0-styled-frame", &renderer, &frame);
+    }
+
+    #[test]
+    fn resolve_fonts_dir_prefers_sibling_then_macos_bundle_resources() {
+        let unique = format!(
+            "yshell-terminal-fonts-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let root = env::temp_dir().join(unique);
+        let bundle_macos = root.join("gTerm.app/Contents/MacOS");
+        let bundle_resources_fonts = root.join("gTerm.app/Contents/Resources/fonts");
+        std::fs::create_dir_all(&bundle_macos).expect("create MacOS dir");
+        std::fs::create_dir_all(&bundle_resources_fonts).expect("create Resources/fonts dir");
+
+        let gterm_exe = bundle_macos.join("gterm");
+        let ui_exe = bundle_macos.join("gterm-ui");
+        assert_eq!(
+            resolve_fonts_dir_from_exe(Some(&gterm_exe)),
+            bundle_resources_fonts
+        );
+        assert_eq!(
+            resolve_fonts_dir_from_exe(Some(&ui_exe)),
+            bundle_resources_fonts
+        );
+
+        let beside_fonts = bundle_macos.join("fonts");
+        std::fs::create_dir_all(&beside_fonts).expect("create sibling fonts dir");
+        assert_eq!(resolve_fonts_dir_from_exe(Some(&gterm_exe)), beside_fonts);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -348,15 +348,26 @@ impl ThemeCatalog {
 
 /// Resolves the directory that holds shipped theme TOML files.
 ///
-/// Order: `<exe_dir>/themes/`, then Linux `/usr/share/yshell/themes/`, then the
-/// repo `assets/themes/` fallback used by `cargo run` / tests.
+/// Order: `<exe_dir>/themes/`, macOS `.app` bundle `../Resources/themes/`
+/// (when the executable is under `Contents/MacOS/`), Linux
+/// `/usr/share/gterm/themes/` and `/usr/share/yshell/themes/`, then the repo
+/// `assets/themes/` fallback used by `cargo run` / tests.
 #[must_use]
 pub fn resolve_shipped_themes_dir() -> PathBuf {
-    if let Ok(exe) = env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let beside = parent.join(THEMES_DIR_NAME);
-            if beside.is_dir() {
-                return beside;
+    let current = env::current_exe().ok();
+    resolve_shipped_themes_dir_from_exe(current.as_deref())
+}
+
+fn resolve_shipped_themes_dir_from_exe(exe: Option<&Path>) -> PathBuf {
+    if let Some(parent) = exe.and_then(Path::parent) {
+        let beside = parent.join(THEMES_DIR_NAME);
+        if beside.is_dir() {
+            return beside;
+        }
+        if let Some(resources) = macos_bundle_resources_dir(parent) {
+            let bundled = resources.join(THEMES_DIR_NAME);
+            if bundled.is_dir() {
+                return bundled;
             }
         }
     }
@@ -370,6 +381,17 @@ pub fn resolve_shipped_themes_dir() -> PathBuf {
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/themes")
+}
+
+fn macos_bundle_resources_dir(exe_dir: &Path) -> Option<PathBuf> {
+    if exe_dir.file_name() != Some(std::ffi::OsStr::new("MacOS")) {
+        return None;
+    }
+    let contents = exe_dir.parent()?;
+    if contents.file_name() != Some(std::ffi::OsStr::new("Contents")) {
+        return None;
+    }
+    Some(contents.join("Resources"))
 }
 
 /// Allocates a unique `user-<millis>-<n>` id that is not reserved and not in use.
@@ -573,5 +595,27 @@ mod tests {
             Some(&ColorTheme::yshell_default())
         );
         assert!(warnings.iter().any(|w| w.contains("injecting")));
+    }
+
+    #[test]
+    fn resolve_shipped_themes_dir_prefers_sibling_then_macos_bundle_resources() {
+        let temp = TempDir::new().expect("tempdir");
+        let bundle_macos = temp.path().join("gTerm.app/Contents/MacOS");
+        let bundle_resources_themes = temp.path().join("gTerm.app/Contents/Resources/themes");
+        fs::create_dir_all(&bundle_macos).expect("create MacOS dir");
+        fs::create_dir_all(&bundle_resources_themes).expect("create Resources/themes dir");
+
+        let gterm_exe = bundle_macos.join("gterm");
+        assert_eq!(
+            resolve_shipped_themes_dir_from_exe(Some(&gterm_exe)),
+            bundle_resources_themes
+        );
+
+        let beside_themes = bundle_macos.join("themes");
+        fs::create_dir_all(&beside_themes).expect("create sibling themes dir");
+        assert_eq!(
+            resolve_shipped_themes_dir_from_exe(Some(&gterm_exe)),
+            beside_themes
+        );
     }
 }

@@ -104,6 +104,12 @@ local toolchain is required:
 
 See [docs/product/github-actions-release.md](docs/product/github-actions-release.md) for details.
 
+> **macOS first launch:** Release DMGs default to ad-hoc signing until Apple Developer ID notarization secrets are configured. Drag `gTerm.app` into `/Applications` and clear the download quarantine attribute before opening:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/gTerm.app
+> ```
+
 ## Linux development
 
 Linux is the current development focus; Windows and macOS use the same

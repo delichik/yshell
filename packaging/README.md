@@ -9,6 +9,7 @@ not by the app at runtime.
 | `PORTABLE.txt`, `gterm-portable.cmd`, `gterm-portable.sh` | Portable archives: documentation and launchers that keep data in `./data` |
 | `windows/gterm.wxs` | WiX v3 source for the MSI installer (`--formats msi`) |
 | `macos/Info.plist` | `Info.plist` for the `gTerm.app` bundle inside the DMG (`--formats dmg`) |
+| `macos/README-macOS.txt` | First-launch guide bundled into ad-hoc macOS DMGs |
 | `linux/gterm.desktop` | Desktop entry installed by the deb/rpm packages |
 | `linux/gterm.spec.in` | RPM spec template (`--formats rpm`) |
 
@@ -43,9 +44,22 @@ produced without touching other content in `dist/`).
 
 ## Current limitations
 
-- **Unsigned.** The MSI, DMG, deb and rpm artifacts are not signed; Windows
-  SmartScreen and macOS Gatekeeper will warn on first launch. Code signing and
-  notarization are tracked as follow-up work.
+- **Code signing & notarization.**
+  - **Windows / Linux:** MSI, deb and rpm packages are unsigned; Windows
+    SmartScreen will warn on first launch.
+  - **macOS:** `gTerm.app` places fonts/themes under `Contents/Resources/` and
+    is **ad-hoc signed** (`codesign --sign -`) by default so Apple Silicon /
+    strict bundle checks do not fail, with `README-macOS.txt` included in the
+    DMG (`xattr -dr com.apple.quarantine /Applications/gTerm.app`). Because it
+    is not notarized without an Apple Developer ID, Gatekeeper still blocks
+    downloaded apps until quarantine is cleared.
+  - **Optional Apple Developer ID + notarization:** set
+    `YSHELL_MACOS_SIGN_IDENTITY` to switch from ad-hoc signing to Developer ID +
+    Hardened Runtime + timestamp, and set either `YSHELL_MACOS_NOTARY_PROFILE`
+    or `YSHELL_MACOS_API_KEY_PATH` / `YSHELL_MACOS_API_KEY_ID` /
+    `YSHELL_MACOS_API_ISSUER_ID` (or `YSHELL_MACOS_APPLE_ID` /
+    `YSHELL_MACOS_APPLE_TEAM_ID` / `YSHELL_MACOS_APPLE_APP_PASSWORD`) to submit
+    and staple the DMG automatically.
 - **AppImage is not built.** It needs FUSE, and the deb/rpm packages already
   cover Linux desktops. Application icons live under `assets/icons/` (generated
   via `python scripts/app-icons/generate.py`) and are embedded in Windows PE

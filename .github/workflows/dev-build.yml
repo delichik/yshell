@@ -63,6 +63,7 @@ jobs:
     name: Build
     needs: plan
     uses: ./.github/workflows/build-artifacts.yml
+    secrets: inherit
     with:
       retention-days: 90
       platforms: ${{ needs.plan.outputs.platforms }}
@@ -125,4 +126,10 @@ jobs:
             This release is a **draft**: no tag exists for it and nothing was
             published. Publishing it by hand is what turns it into a real
             release.
+
+            ### macOS first launch (unnotarized / ad-hoc builds)
+            If macOS reports `"gTerm.app" is damaged` or `Apple could not verify "gTerm.app"`, drag `gTerm.app` into `/Applications` and run:
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/gTerm.app
+            ```
           files: upload/*

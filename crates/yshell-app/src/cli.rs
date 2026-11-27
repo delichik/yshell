@@ -258,6 +258,9 @@ impl CliInvocation {
                         parent_pid: 0,
                     },
                 )?,
+                // macOS LaunchServices may pass a Process Serial Number (`-psn_0_...`)
+                // when opening a `.app` bundle from Finder.
+                arg if arg.starts_with("-psn_") => {}
                 unknown => return Err(AppError::new(format!("unknown argument: {unknown}"))),
             }
         }
@@ -484,5 +487,12 @@ mod tests {
                 parent_pid: 0,
             }
         );
+    }
+
+    #[test]
+    fn ignores_macos_launch_services_psn_argument() {
+        let invocation = CliInvocation::parse(["-psn_0_123456".to_owned()]).expect("parse");
+        assert_eq!(invocation.command, CliCommand::HostEntry);
+        assert!(invocation.config_dir.is_none());
     }
 }

@@ -26,6 +26,7 @@ jobs:
   build:
     name: Build
     uses: ./.github/workflows/build-artifacts.yml
+    secrets: inherit
     with:
       version: ${{ inputs.version || '' }}
       retention-days: 90
@@ -60,3 +61,9 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: upload/*
           generate_release_notes: true
+          body: |
+            ### macOS first launch (unnotarized / ad-hoc builds)
+            If macOS reports `"gTerm.app" is damaged` or `Apple could not verify "gTerm.app"`, drag `gTerm.app` into `/Applications` and run:
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/gTerm.app
+            ```

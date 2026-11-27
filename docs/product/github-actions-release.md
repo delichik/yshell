@@ -42,7 +42,7 @@ cargo xtask doctor    # 当前机器有哪些工具、能出哪些格式
   `SHA256SUMS.txt` 一并发布。
 - 便携包内含 `yshell`/`yshell.exe`、`yshell-portable.sh`/`.cmd` 启动器、
   `PORTABLE.txt`、`README.md`、`LICENSE`、`BUILD.txt`（版本/目标/rustc/commit）。
-- 安装包不做签名（见第 7 节）。
+- Windows/Linux 安装包默认不做代码签名；macOS 安装包（`gTerm.app`）和便携二进制默认执行 **ad-hoc 签名**（`codesign --sign -`），并将 `fonts/`、`themes/` 放入 `Contents/Resources/`。配置了 Apple Developer ID Secrets 时自动切换为正式签名与公证（见第 7 节）。
 
 ## 3. `ci.yml`
 
@@ -148,7 +148,9 @@ cargo xtask checksums --dir dist                     # 汇总 SHA256SUMS.txt
 - 安装包只能在其目标平台（或装有对应工具的平台）上构建：`msi` 需要 WiX、`dmg`
   需要 macOS 的 `hdiutil`、`deb` 需要 `cargo-deb`、`rpm` 需要 `rpmbuild`。
   `--formats` 中请求了当前环境无法构建的格式会直接报错并给出安装提示。
-- 未做代码签名：Windows SmartScreen、macOS Gatekeeper 首次运行会提示，属于预期行为。
+- Windows/Linux 未做代码签名：Windows SmartScreen 首次运行会提示，属于预期行为。
+- macOS 默认行为：未配置 Apple Developer ID 证书时，`xtask` 默认对 `gTerm.app`（及 4 个可执行文件）和便携包二进制执行 **ad-hoc 签名**，并在 DMG 内附带 `README-macOS.txt` 指导用户执行 `xattr -dr com.apple.quarantine /Applications/gTerm.app` 移除下载隔离属性后启动。
+- macOS 正式签名与公证（可选）：在仓库 Secrets 中配置 `MACOS_CERT_P12_BASE64`、`MACOS_CERT_PASSWORD`、`MACOS_SIGN_IDENTITY`（及公证所需的 `MACOS_API_KEY_P8_BASE64`、`MACOS_API_KEY_ID`、`MACOS_API_ISSUER_ID`）后，`build-artifacts.yml` 会导入临时 keychain 并传递 `YSHELL_MACOS_*` 环境变量，`xtask` 自动切换为 Developer ID + Hardened Runtime 签名并执行 `xcrun notarytool submit` + `stapler`。本地构建同样支持 `YSHELL_MACOS_SIGN_IDENTITY` 与 `YSHELL_MACOS_NOTARY_PROFILE`（或 `YSHELL_MACOS_API_KEY_*` / `YSHELL_MACOS_APPLE_*`）。
 - 暂无应用图标（`assets/icons/` 仍是占位目录）：安装包使用系统默认图标；
   `packaging/macos/Info.plist` 已支持 `assets/icons/yshell.icns`，补上图标即可生效。
 - AppImage 暂不提供（需要图标与 FUSE），Linux 用 deb/rpm 覆盖。

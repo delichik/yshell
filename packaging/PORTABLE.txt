@@ -40,8 +40,9 @@ Notes
   - Secrets are stored in the OS keychain by default. The local encrypted file
     store is not selected through an environment variable; master-password /
     secret-store behaviour is configured in the app.
-  - macOS: unsigned binaries are quarantined after download. Remove the
-    quarantine flag with: xattr -d com.apple.quarantine ./gterm
+  - macOS: unsigned / ad-hoc builds are quarantined after download. Remove
+    the quarantine flag recursively across all bundled binaries before running:
+      xattr -dr com.apple.quarantine .
   - Linux: requires the X11/XCB runtime libraries (libx11, libxcb).
   - Verify your download against the SHA256SUMS.txt published next to this
     archive.

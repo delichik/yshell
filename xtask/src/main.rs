@@ -16,6 +16,7 @@ mod context;
 mod contrast;
 mod dist;
 mod installers;
+mod macos_sign;
 mod tasks;
 
 use std::process::ExitCode;

@@ -291,15 +291,20 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
 
         copy_file(ctx.binary, &macos_dir.join("gterm"), true)?;
         // The Host entry (`gterm`) spawns these role executables as siblings.
+        let mut staged_helpers = Vec::with_capacity(ctx.role_binaries.len());
         for role in ctx.role_binaries {
             let name = role
                 .file_name()
                 .with_context(|| format!("{} has no file name", role.display()))?;
-            copy_file(role, &macos_dir.join(name), true)?;
+            let dest_bin = macos_dir.join(name);
+            copy_file(role, &dest_bin, true)?;
+            staged_helpers.push(dest_bin);
         }
-        // Beside the binary (`Contents/MacOS/fonts`) for `resolve_fonts_dir()`.
-        crate::dist::copy_shipped_fonts_public(ctx.root, &macos_dir.join("fonts"))?;
-        crate::dist::copy_shipped_themes_public(ctx.root, &macos_dir.join("themes"))?;
+        // Keep non-executable assets in `Contents/Resources/` (`resolve_fonts_dir()`
+        // and `resolve_shipped_themes_dir()` check `../Resources/` for `.app`
+        // bundles) so Apple codesign/notarization does not reject `Contents/MacOS/`.
+        crate::dist::copy_shipped_fonts_public(ctx.root, &resources_dir.join("fonts"))?;
+        crate::dist::copy_shipped_themes_public(ctx.root, &resources_dir.join("themes"))?;
 
         let icon_source = ctx.root.join("assets/icons/gterm.icns");
         let icon_entry = if icon_source.is_file() {
@@ -324,6 +329,15 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
             false,
         )?;
 
+        let sign_config = crate::macos_sign::sign_app_bundle(&app, &staged_helpers)?;
+        if !sign_config.is_developer_id() {
+            copy_file(
+                &ctx.root.join("packaging/macos/README-macOS.txt"),
+                &stage.join("README-macOS.txt"),
+                false,
+            )?;
+        }
+
         {
             use std::os::unix::fs::symlink;
             let applications = stage.join("Applications");
@@ -341,6 +355,7 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
             .args(["-ov", "-format", "UDZO"])
             .arg(&dest);
         context::run(command)?;
+        crate::macos_sign::sign_and_notarize_dmg(&dest, &sign_config)?;
         Ok(dest)
     }
 }
@@ -785,6 +800,24 @@ mod tests {
         assert!(
             !wxs.contains("@HOST_BIN@") && !wxs.contains("GTermHostExecutable"),
             "gterm.exe is the Host entry; there is no separate gterm-host binary"
+        );
+    }
+
+    #[test]
+    fn macos_first_launch_docs_include_recursive_quarantine_command() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let dmg_readme = fs::read_to_string(root.join("packaging/macos/README-macOS.txt"))
+            .expect("read packaging/macos/README-macOS.txt");
+        assert!(
+            dmg_readme.contains("xattr -dr com.apple.quarantine /Applications/gTerm.app"),
+            "DMG guide must document recursive quarantine removal for gTerm.app"
+        );
+
+        let portable = fs::read_to_string(root.join("packaging/PORTABLE.txt"))
+            .expect("read packaging/PORTABLE.txt");
+        assert!(
+            portable.contains("xattr -dr com.apple.quarantine"),
+            "PORTABLE.txt must document recursive quarantine removal for all role binaries"
         );
     }
 }
