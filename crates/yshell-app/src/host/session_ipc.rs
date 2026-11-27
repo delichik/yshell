@@ -979,15 +979,16 @@ fn reader_loop(
     exit_state: Arc<(Mutex<WorkerExitState>, Condvar)>,
 ) {
     let mut final_exit_state: Option<WorkerExitState> = None;
+    let mut line = String::new();
     loop {
-        let mut line = String::new();
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => {}
             // An idle socket is not a disconnect. Without this, any read timeout
             // that survived on the socket (or the 500 ms handshake timeout when
             // this thread won the race against `set_read_timeout(None)`) kills
-            // the session on its first quiet moment.
+            // the session on its first quiet moment. Keep partial bytes in `line`
+            // across WouldBlock/TimedOut so split messages are not truncated.
             Err(error)
                 if error.kind() == std::io::ErrorKind::WouldBlock
                     || error.kind() == std::io::ErrorKind::TimedOut =>
@@ -996,7 +997,9 @@ fn reader_loop(
             }
             Err(_) => break,
         }
-        let Ok(msg) = serde_json::from_str::<WorkerToHost>(line.trim_end()) else {
+        let parsed = serde_json::from_str::<WorkerToHost>(line.trim_end());
+        line.clear();
+        let Ok(msg) = parsed else {
             continue;
         };
         match msg {
@@ -1394,6 +1397,7 @@ pub fn run_session_worker_ipc(
 
     let mut exit_reason: Option<String> = None;
     let mut first_output_forwarded = false;
+    let mut cmd_line = String::new();
 
     'io: loop {
         // Parent liveness is a cheap secondary check; the Host IPC socket EOF
@@ -1404,7 +1408,6 @@ pub fn run_session_worker_ipc(
         }
         // Drain host commands (non-blocking via read timeout).
         loop {
-            let mut cmd_line = String::new();
             match reader.read_line(&mut cmd_line) {
                 Ok(0) => {
                     tracing::info!("session worker Host IPC closed; disconnecting");
@@ -1414,7 +1417,9 @@ pub fn run_session_worker_ipc(
                     return Ok(());
                 }
                 Ok(_) => {
-                    let Ok(cmd) = serde_json::from_str::<HostToWorker>(cmd_line.trim_end()) else {
+                    let parsed = serde_json::from_str::<HostToWorker>(cmd_line.trim_end());
+                    cmd_line.clear();
+                    let Ok(cmd) = parsed else {
                         tracing::debug!("session worker ignored an invalid Host command");
                         continue;
                     };
@@ -1927,5 +1932,51 @@ mod tests {
         reader.join().expect("reader disconnected");
         assert!(!shell.is_connected());
         assert_eq!(shell.disconnect_reason(), None);
+    }
+
+    #[test]
+    fn reader_loop_preserves_partial_json_across_read_timeouts() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind reader probe");
+        let address = listener.local_addr().expect("listener addr");
+        let client = thread::spawn(move || TcpStream::connect(address).expect("connect"));
+        let (server, _) = listener.accept().expect("accept reader probe");
+        let mut writer = client.join().expect("client thread");
+        server
+            .set_read_timeout(Some(Duration::from_millis(40)))
+            .expect("read timeout");
+
+        let (tx, rx) = mpsc::channel();
+        let connected = Arc::new(AtomicBool::new(true));
+        let disconnect_requested = Arc::new(AtomicBool::new(false));
+        let exit_state = Arc::new((Mutex::new(WorkerExitState::Running), Condvar::new()));
+        let reader_flag = Arc::clone(&connected);
+        let reader_disconnect = Arc::clone(&disconnect_requested);
+        let reader_state = Arc::clone(&exit_state);
+        let reader = thread::spawn(move || {
+            reader_loop(
+                BufReader::new(server),
+                tx,
+                reader_flag,
+                reader_disconnect,
+                reader_state,
+            )
+        });
+
+        writer
+            .write_all(br#"{"type":"outp"#)
+            .expect("write partial line");
+        writer.flush().expect("flush partial line");
+        thread::sleep(Duration::from_millis(120));
+        writer
+            .write_all(b"ut\",\"data_b64\":\"aGk=\"}\n")
+            .expect("write remainder");
+        writer.flush().expect("flush remainder");
+
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(2)).expect("output"),
+            b"hi"
+        );
+        drop(writer);
+        reader.join().expect("reader thread");
     }
 }
