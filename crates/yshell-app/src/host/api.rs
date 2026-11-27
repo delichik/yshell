@@ -16,7 +16,11 @@ pub enum HostCommand {
     /// Register or refresh a logical session worker.
     WorkerStarted { session_id: String, pid: u32 },
     /// Worker exited (clean or faulted).
-    WorkerExited { session_id: String },
+    WorkerExited {
+        session_id: String,
+        #[serde(default)]
+        pid: u32,
+    },
     /// MCP daemon process started.
     McpStarted { pid: u32 },
     /// MCP daemon exited.

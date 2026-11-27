@@ -4,6 +4,7 @@
 //! session cleanup themselves (D38).
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::rc::Rc;
@@ -35,6 +36,7 @@ enum ChildRole {
 
 /// A Host-owned child process plus the run-state identity it belongs to.
 struct TrackedChild {
+    pid: u32,
     child: Child,
     role: ChildRole,
     session_id: Option<String>,
@@ -55,6 +57,9 @@ pub struct HostService {
     /// Owned child processes (SessionWorker / McpDaemon), reaped on the
     /// supervisor tick so run-state never keeps stale worker pid records.
     children: Vec<TrackedChild>,
+    /// Latest adopted worker PID per session key so delayed exits from older
+    /// workers after a reconnect do not clobber the active session.
+    active_session_workers: HashMap<String, u32>,
     /// Per-config-directory single-instance lock, held until the Host exits.
     _instance_lock: InstanceLock,
     /// MCP jobs from the out-of-process daemon land here; UI tick drains them.
@@ -154,6 +159,7 @@ impl HostService {
             shutdown_requested: false,
             pending_events: Vec::new(),
             children: Vec::new(),
+            active_session_workers: HashMap::new(),
             _instance_lock: instance_lock,
             mcp_inbox,
             shell_inbox,
@@ -274,11 +280,16 @@ impl HostService {
     /// `Child` handles are waited on here; without this a dead worker would stay
     /// in `run-state.json` forever and a later Host could kill a reused pid.
     fn poll_children(&mut self) {
-        let mut exited: Vec<(ChildRole, Option<String>, String)> = Vec::new();
+        let mut exited: Vec<(ChildRole, Option<String>, u32, String)> = Vec::new();
         self.children
             .retain_mut(|tracked| match tracked.child.try_wait() {
                 Ok(Some(status)) => {
-                    exited.push((tracked.role, tracked.session_id.clone(), status.to_string()));
+                    exited.push((
+                        tracked.role,
+                        tracked.session_id.clone(),
+                        tracked.pid,
+                        status.to_string(),
+                    ));
                     false
                 }
                 Ok(None) => true,
@@ -286,22 +297,24 @@ impl HostService {
                     exited.push((
                         tracked.role,
                         tracked.session_id.clone(),
+                        tracked.pid,
                         format!("wait failed: {error}"),
                     ));
                     false
                 }
             });
-        for (role, session_id, detail) in exited {
+        for (role, session_id, pid, detail) in exited {
             tracing::info!(
                 role = ?role,
                 session_id = session_id.as_deref().unwrap_or(""),
+                pid,
                 detail,
                 "host child exited"
             );
             match role {
                 ChildRole::SessionWorker => {
                     if let Some(session_id) = session_id {
-                        let _ = self.dispatch(HostCommand::WorkerExited { session_id });
+                        let _ = self.dispatch(HostCommand::WorkerExited { session_id, pid });
                     }
                 }
                 ChildRole::McpDaemon => {
@@ -352,14 +365,16 @@ impl HostService {
                 return Err(error);
             }
         };
-        if child.id() != current_pid() {
-            let _ = self.track_child_pid(child.id());
+        let pid = child.id();
+        if pid != current_pid() {
+            let _ = self.track_child_pid(pid);
         }
         tracing::info!(
-            pid = child.id(),
+            pid,
             "spawned GUI Shell for a window request (no Shell was attached)"
         );
         self.children.push(TrackedChild {
+            pid,
             child,
             role: ChildRole::Shell,
             session_id: None,
@@ -516,6 +531,7 @@ impl HostService {
             pid,
         })?;
         self.children.push(TrackedChild {
+            pid,
             child: worker.child,
             role: ChildRole::SessionWorker,
             session_id: Some(session_id),
@@ -558,6 +574,7 @@ impl HostService {
         self.mcp_pid = Some(pid);
         self.mcp_daemon_fingerprint = Some((bind_host.to_owned(), port, token.to_owned()));
         self.children.push(TrackedChild {
+            pid,
             child,
             role: ChildRole::McpDaemon,
             session_id: None,
@@ -636,13 +653,30 @@ impl HostService {
             HostCommand::RequestShutdown => {
                 self.begin_shutdown()?;
             }
-            HostCommand::WorkerStarted { session_id: _, pid } => {
+            HostCommand::WorkerStarted { session_id, pid } => {
+                self.active_session_workers.insert(session_id, pid);
                 // Never assign the Host process itself into its own job.
                 if pid != current_pid() {
                     let _ = self.track_child_pid(pid);
                 }
             }
-            HostCommand::WorkerExited { session_id } => {
+            HostCommand::WorkerExited { session_id, pid } => {
+                if pid != 0
+                    && self
+                        .active_session_workers
+                        .get(&session_id)
+                        .is_some_and(|&active_pid| active_pid != pid)
+                {
+                    tracing::debug!(
+                        session_id = %session_id,
+                        exited_pid = pid,
+                        "ignoring exited stale session worker"
+                    );
+                    return Ok(());
+                }
+                if pid == 0 || self.active_session_workers.get(&session_id).copied() == Some(pid) {
+                    self.active_session_workers.remove(&session_id);
+                }
                 // Surface the crash to the Shell through the projection instead
                 // of leaving the tab "connected" until a poll notices.
                 self.runtime
@@ -777,5 +811,43 @@ mod tests {
         assert!(!host.borrow().shutdown_requested());
         // No run-state file is created anymore.
         assert!(!temp.path().join("run-state.json").exists());
+    }
+
+    #[test]
+    fn stale_worker_exit_does_not_drop_reconnected_session() {
+        let temp = TempDir::new().expect("temp");
+        let host = HostService::start(runtime_in(&temp)).expect("host");
+        let mut host = host.borrow_mut();
+
+        host.dispatch(HostCommand::WorkerStarted {
+            session_id: "ses_1".to_owned(),
+            pid: 1001,
+        })
+        .expect("start old worker");
+        host.dispatch(HostCommand::WorkerStarted {
+            session_id: "ses_1".to_owned(),
+            pid: 1002,
+        })
+        .expect("start reconnected worker");
+
+        host.dispatch(HostCommand::WorkerExited {
+            session_id: "ses_1".to_owned(),
+            pid: 1001,
+        })
+        .expect("stale worker exit");
+        assert!(
+            host.take_events().is_empty(),
+            "stale worker exit must not fault the active reconnected session"
+        );
+
+        host.dispatch(HostCommand::WorkerExited {
+            session_id: "ses_1".to_owned(),
+            pid: 1002,
+        })
+        .expect("active worker exit");
+        assert!(host
+            .take_events()
+            .into_iter()
+            .any(|event| matches!(event, HostEvent::WorkerFaulted { session_id } if session_id == "ses_1")));
     }
 }

@@ -545,14 +545,16 @@ impl AppRuntime {
         session_id: &yshell_core::SessionId,
         transport: Option<yshell_ssh::SshTransport>,
         shell: Option<Box<dyn yshell_ssh::ShellSession>>,
-        worker: Option<crate::host::session_ipc::SessionWorkerChild>,
+        mut worker: Option<crate::host::session_ipc::SessionWorkerChild>,
         password_retry: bool,
         is_reconnect: bool,
     ) -> AppResult<AppProjection> {
-        // Stash worker for the window manager to adopt into HostService.
-        if let Some(worker) = worker {
-            self.pending_session_workers.push(worker);
-        }
+        let terminate_unadopted_worker =
+            |worker: &mut Option<crate::host::session_ipc::SessionWorkerChild>| {
+                if let Some(worker) = worker.take() {
+                    let _ = crate::host::liveness::terminate_pid(worker.pid);
+                }
+            };
         let sftp_mode = self
             .sessions
             .get(session_key)
@@ -561,10 +563,10 @@ impl AppRuntime {
         let shell_present = shell.is_some();
         let viewport = self.viewport_pty_size();
         let logging_notice = {
-            let runtime = self
-                .sessions
-                .get_mut(session_key)
-                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            let Some(runtime) = self.sessions.get_mut(session_key) else {
+                terminate_unadopted_worker(&mut worker);
+                return Err(AppError::new("active runtime session is missing"));
+            };
             runtime.clear_connection_overlay();
             if let Some(transport) = transport {
                 runtime.attach_transport(transport);
@@ -572,9 +574,13 @@ impl AppRuntime {
             if let Some(shell) = shell {
                 runtime.attach_shell_session(shell);
                 // Resize to the window *before* draining MOTD (see viewport_pty_size).
-                let _ = runtime
+                if let Err(error) = runtime
                     .resize_shell_pty(viewport.columns, viewport.rows)
-                    .map_err(AppError::from_error)?;
+                    .map_err(AppError::from_error)
+                {
+                    terminate_unadopted_worker(&mut worker);
+                    return Err(error);
+                }
                 runtime.clear_pty_force_resync();
             }
             runtime.take_logging_notice()
@@ -583,17 +589,24 @@ impl AppRuntime {
             self.fold_logging_notice_into_status(notice);
         }
         if sftp_mode || shell_connected {
-            let connected_events = self
+            let connected_events = match self
                 .dispatcher
                 .dispatch(SessionCommand::SetSessionState {
                     session_id: session_id.clone(),
                     state: yshell_core::SessionState::Connected,
                 })
-                .map_err(AppError::from_error)?;
-            let runtime = self
-                .sessions
-                .get_mut(session_key)
-                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+                .map_err(AppError::from_error)
+            {
+                Ok(events) => events,
+                Err(error) => {
+                    terminate_unadopted_worker(&mut worker);
+                    return Err(error);
+                }
+            };
+            let Some(runtime) = self.sessions.get_mut(session_key) else {
+                terminate_unadopted_worker(&mut worker);
+                return Err(AppError::new("active runtime session is missing"));
+            };
             Self::apply_session_events(session_id, runtime, connected_events);
             if self
                 .pending_auth_prompt
@@ -684,6 +697,10 @@ impl AppRuntime {
             }
             let _ = self.mark_session_failed_after_connect(session_key);
             self.set_status_kind("session-shell-not-live", message, target, String::new());
+            terminate_unadopted_worker(&mut worker);
+        } else if let Some(worker) = worker {
+            // Adopt only once transport/PTY attach and state transition have succeeded.
+            self.pending_session_workers.push(worker);
         }
         Ok(self.projection())
     }
