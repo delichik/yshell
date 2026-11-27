@@ -267,6 +267,7 @@ struct RealNativeShellSession {
     opened_at: Instant,
     last_activity: Instant,
     first_output_logged: bool,
+    pending_error: Option<SshError>,
 }
 
 impl RealSshAdapter {
@@ -860,14 +861,19 @@ impl ShellSession for RealShellSessionPlaceholder {
     }
 
     fn poll_output(&mut self) -> SshResult<Vec<u8>> {
-        self.refresh_transport_state();
         if let Some(chunk) = self.pending_output.pop_front() {
             return Ok(chunk);
         }
         match &mut self.transport {
-            RealShellTransport::Scaffold => Ok(Vec::new()),
+            RealShellTransport::Scaffold => {
+                self.refresh_transport_state();
+                Ok(self.pending_output.pop_front().unwrap_or_default())
+            }
             RealShellTransport::Native(session) => {
                 session.drain_into(&mut self.pending_output)?;
+                if self.pending_output.is_empty() {
+                    self.refresh_transport_state();
+                }
                 Ok(self.pending_output.pop_front().unwrap_or_default())
             }
         }
@@ -1525,6 +1531,7 @@ impl RealNativeShellSession {
             opened_at: now,
             last_activity: now,
             first_output_logged: false,
+            pending_error: None,
         })
     }
 
@@ -1541,6 +1548,9 @@ impl RealNativeShellSession {
     }
 
     fn drain_into(&mut self, queue: &mut VecDeque<Vec<u8>>) -> SshResult<()> {
+        if let Some(error) = self.pending_error.take() {
+            return Err(error);
+        }
         if self.closed {
             return Ok(());
         }
@@ -1558,6 +1568,7 @@ impl RealNativeShellSession {
                 );
             }
         }
+        let before_stdout = queue.len();
         let stdout_bytes = match drain_read_stream_raw(&mut self.channel, queue) {
             Ok(bytes) => bytes,
             Err(io_error) => {
@@ -1569,6 +1580,11 @@ impl RealNativeShellSession {
                     self.opened_at,
                 );
                 self.mark_closed_after_transport_error();
+                if queue.len() > before_stdout {
+                    self.last_activity = Instant::now();
+                    self.pending_error = Some(error);
+                    return Ok(());
+                }
                 return Err(error);
             }
         };
@@ -1587,6 +1603,20 @@ impl RealNativeShellSession {
                     self.opened_at,
                 );
                 self.mark_closed_after_transport_error();
+                if !queue.is_empty() {
+                    self.last_activity = Instant::now();
+                    if stdout_bytes > 0 && !self.first_output_logged {
+                        self.first_output_logged = true;
+                        tracing::debug!(
+                            target: "yshell::ssh",
+                            bytes = stdout_bytes,
+                            elapsed_ms = self.opened_at.elapsed().as_millis(),
+                            "ssh shell received first output"
+                        );
+                    }
+                    self.pending_error = Some(error);
+                    return Ok(());
+                }
                 return Err(error);
             }
         };
@@ -1926,6 +1956,7 @@ impl SshTransport {
             opened_at: now,
             last_activity: now,
             first_output_logged: false,
+            pending_error: None,
         }))
     }
 
@@ -1951,6 +1982,7 @@ struct SshTransportShellSession {
     opened_at: Instant,
     last_activity: Instant,
     first_output_logged: bool,
+    pending_error: Option<SshError>,
 }
 
 impl std::fmt::Debug for SshTransportShellSession {
@@ -1971,6 +2003,9 @@ impl ShellSession for SshTransportShellSession {
         if let Some(chunk) = self.pending_output.pop_front() {
             self.last_activity = Instant::now();
             return Ok(chunk);
+        }
+        if let Some(error) = self.pending_error.take() {
+            return Err(error);
         }
         if self.closed {
             return Ok(Vec::new());
@@ -2000,6 +2035,11 @@ impl ShellSession for SshTransportShellSession {
                 );
                 self.closed = true;
                 self.transport.mark_closed();
+                if let Some(chunk) = self.pending_output.pop_front() {
+                    self.last_activity = Instant::now();
+                    self.pending_error = Some(error);
+                    return Ok(chunk);
+                }
                 return Err(error);
             }
         };
@@ -2019,6 +2059,20 @@ impl ShellSession for SshTransportShellSession {
                 );
                 self.closed = true;
                 self.transport.mark_closed();
+                if let Some(chunk) = self.pending_output.pop_front() {
+                    self.last_activity = Instant::now();
+                    if stdout_bytes > 0 && !self.first_output_logged {
+                        self.first_output_logged = true;
+                        tracing::debug!(
+                            target: "yshell::ssh",
+                            bytes = stdout_bytes,
+                            elapsed_ms = self.opened_at.elapsed().as_millis(),
+                            "ssh shell received first output"
+                        );
+                    }
+                    self.pending_error = Some(error);
+                    return Ok(chunk);
+                }
                 return Err(error);
             }
         };
@@ -3640,5 +3694,38 @@ mod tests {
         let drained_bytes: usize = queue.iter().map(Vec::len).sum();
         assert_eq!(drained_bytes, MAX_DRAIN_BYTES_PER_POLL);
         assert_eq!(cursor.position() as usize, MAX_DRAIN_BYTES_PER_POLL);
+    }
+
+    #[test]
+    fn drain_read_stream_raw_keeps_partial_chunks_before_error() {
+        use std::collections::VecDeque;
+        use std::io::{self, Read};
+
+        struct ChunkThenErrorReader {
+            sent: bool,
+        }
+
+        impl Read for ChunkThenErrorReader {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if !self.sent {
+                    self.sent = true;
+                    let chunk = b"fatal message\n";
+                    buf[..chunk.len()].copy_from_slice(chunk);
+                    return Ok(chunk.len());
+                }
+                Err(io::Error::other("transport read"))
+            }
+        }
+
+        let mut reader = ChunkThenErrorReader { sent: false };
+        let mut queue = VecDeque::new();
+        let error = drain_read_stream_raw(&mut reader, &mut queue)
+            .expect_err("second read should return transport read");
+        assert_eq!(error.to_string(), "transport read");
+        assert_eq!(queue.len(), 1);
+        assert_eq!(
+            queue.pop_front().as_deref(),
+            Some(b"fatal message\n".as_slice())
+        );
     }
 }
