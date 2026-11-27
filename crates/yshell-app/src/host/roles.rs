@@ -39,15 +39,15 @@ pub struct McpDaemonArgs {
 
 /// File name of the executable implementing `role` (without `.exe`).
 ///
-/// `Host` maps to the user-facing `yshell` entry itself: the Host is the entry
-/// process now, not a separate `yshell-host` binary.
+/// `Host` maps to the user-facing `gterm` entry itself: the Host is the entry
+/// process now, not a separate `gterm-host` binary.
 #[must_use]
 pub fn role_exe_name(role: ProcessRole) -> &'static str {
     match role {
-        ProcessRole::Host => "yshell",
-        ProcessRole::Shell => "yshell-shell",
-        ProcessRole::SessionWorker => "yshell-session-worker",
-        ProcessRole::McpDaemon => "yshell-mcp-daemon",
+        ProcessRole::Host => "gterm",
+        ProcessRole::Shell => "gterm-ui",
+        ProcessRole::SessionWorker => "gterm-session-worker",
+        ProcessRole::McpDaemon => "gterm-mcp-daemon",
     }
 }
 

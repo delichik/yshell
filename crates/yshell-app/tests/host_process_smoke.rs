@@ -52,7 +52,7 @@ fn wait_for_exit(host: &mut Child, timeout: Duration) {
 fn default_split_path_boots_host_attaches_shell_and_cleans_up() {
     let temp = tempfile::tempdir().expect("tempdir");
     let dir = temp.path().to_path_buf();
-    let mut host = Command::new(env!("CARGO_BIN_EXE_yshell"))
+    let mut host = Command::new(env!("CARGO_BIN_EXE_gterm"))
         .arg("--config-dir")
         .arg(&dir)
         .arg("--host")
@@ -60,7 +60,7 @@ fn default_split_path_boots_host_attaches_shell_and_cleans_up() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn yshell --host");
+        .expect("spawn gterm --host");
 
     let client = wait_for_bridge(&dir, &mut host);
     client.attach(1).expect("attach");

@@ -1506,14 +1506,14 @@ fn active_confirm(
     }
     if quit {
         let message = if projection.quit_confirm_details.is_empty() {
-            "Quit YShell now? Active runtime sessions will be disconnected.".to_owned()
+            "Quit gTerm now? Active runtime sessions will be disconnected.".to_owned()
         } else {
             "Quit the application while sessions are still active?".to_owned()
         };
         let _ = main;
         return Some(ConfirmView {
             kind: CONFIRM_QUIT,
-            title: "Quit YShell".into(),
+            title: "Quit gTerm".into(),
             message,
             label: "Quit",
         });
@@ -1522,7 +1522,7 @@ fn active_confirm(
         return Some(ConfirmView {
             kind: CONFIRM_MCP_CONSENT,
             title: "Allow AI control of terminals".into(),
-            message: "An AI agent wants control of YShell terminal sessions: run commands, read the screen, and open or close tabs. It cannot fill passwords or accept host keys — those stay in this app. Allow?".into(),
+            message: "An AI agent wants control of gTerm terminal sessions: run commands, read the screen, and open or close tabs. It cannot fill passwords or accept host keys — those stay in this app. Allow?".into(),
             label: "Allow",
         });
     }

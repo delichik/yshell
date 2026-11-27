@@ -47,7 +47,7 @@ impl From<io::Error> for StdioServerError {
 pub fn run_stdio_server(config_dir: &Path) -> Result<(), StdioServerError> {
     let endpoint = load_endpoint(config_dir).map_err(|error| {
         StdioServerError::Endpoint(format!(
-            "YShell MCP endpoint not found at {} ({error}). Open the YShell app and turn on MCP in Settings → AI / MCP, then retry.",
+            "gTerm MCP endpoint not found at {} ({error}). Open the gTerm app and turn on MCP in Settings → AI / MCP, then retry.",
             crate::endpoint_path(config_dir).display()
         ))
     })?;
@@ -92,10 +92,10 @@ pub fn run_stdio_server(config_dir: &Path) -> Result<(), StdioServerError> {
                     "protocolVersion": "2024-11-05",
                     "capabilities": { "tools": {} },
                     "serverInfo": {
-                        "name": "yshell",
+                        "name": "gterm",
                         "version": env!("CARGO_PKG_VERSION"),
                         "description": format!(
-                            "YShell terminal control via the running GUI. {}",
+                            "gTerm terminal control via the running GUI. {}",
                             MCP_BOUNDARIES_TEXT
                         )
                     }
@@ -161,12 +161,12 @@ fn tool_descriptors() -> Vec<Value> {
     vec![
         tool(
             "get_mcp_info",
-            "YShell MCP status, product boundaries, and host config hint. No control required. Terminal sessions only — not SFTP/tunnels; passwords and host keys stay in the GUI.",
+            "gTerm MCP status, product boundaries, and host config hint. No control required. Terminal sessions only — not SFTP/tunnels; passwords and host keys stay in the GUI.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool(
             "list_saved_sessions",
-            "List saved session profiles from the running YShell app.",
+            "List saved session profiles from the running gTerm app.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool(

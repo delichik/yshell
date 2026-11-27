@@ -31,7 +31,7 @@ pub fn run() -> AppResult<()> {
             })
         }
         other => Err(AppError::new(format!(
-            "yshell-mcp-daemon cannot run: {other:?}"
+            "gterm-mcp-daemon cannot run: {other:?}"
         ))),
     }
 }

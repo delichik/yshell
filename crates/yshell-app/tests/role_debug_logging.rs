@@ -69,7 +69,7 @@ fn session_worker_writes_detailed_debug_log_when_enabled() {
     let ipc_port = free_port();
 
     let output = run_role(
-        env!("CARGO_BIN_EXE_yshell-session-worker"),
+        env!("CARGO_BIN_EXE_gterm-session-worker"),
         &[
             OsStr::new("--config-dir"),
             config.path().as_os_str(),
@@ -84,7 +84,7 @@ fn session_worker_writes_detailed_debug_log_when_enabled() {
             OsStr::new("--ipc-token"),
             OsStr::new("test-token"),
         ],
-        "yshell-session-worker",
+        "gterm-session-worker",
     );
     assert!(
         !output.status.success(),
@@ -122,7 +122,7 @@ fn mcp_daemon_writes_detailed_debug_log_when_enabled() {
     enable_debug_logging(config.path());
 
     let output = run_role(
-        env!("CARGO_BIN_EXE_yshell-mcp-daemon"),
+        env!("CARGO_BIN_EXE_gterm-mcp-daemon"),
         &[
             OsStr::new("--config-dir"),
             config.path().as_os_str(),
@@ -134,7 +134,7 @@ fn mcp_daemon_writes_detailed_debug_log_when_enabled() {
             OsStr::new("--parent-pid"),
             OsStr::new("0"),
         ],
-        "yshell-mcp-daemon",
+        "gterm-mcp-daemon",
     );
     assert!(
         !output.status.success(),
@@ -173,7 +173,7 @@ fn gui_shell_writes_debug_log_before_attaching() {
 
     // The Shell has no Host to attach to, but its log must already exist by the
     // time the attach retry loop starts. Kill it instead of waiting it out.
-    let mut child = Command::new(env!("CARGO_BIN_EXE_yshell-shell"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_gterm-ui"))
         .args([
             OsStr::new("--config-dir"),
             config.path().as_os_str(),
@@ -183,7 +183,7 @@ fn gui_shell_writes_debug_log_before_attaching() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn yshell-shell");
+        .expect("spawn gterm-ui");
     let log_path = config.path().join("logs").join("yshell-shell-debug.log");
     let deadline = Instant::now() + Duration::from_secs(20);
     let mut log = String::new();
@@ -224,7 +224,7 @@ fn session_worker_follows_a_runtime_debug_toggle() {
         .port()
         .to_string();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_yshell-session-worker"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_gterm-session-worker"))
         .args([
             OsStr::new("--config-dir"),
             config.path().as_os_str(),
@@ -243,7 +243,7 @@ fn session_worker_follows_a_runtime_debug_toggle() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn yshell-session-worker");
+        .expect("spawn gterm-session-worker");
 
     let deadline = Instant::now() + Duration::from_secs(20);
     let mut stream = loop {
@@ -312,7 +312,7 @@ fn role_processes_do_not_write_debug_logs_when_disabled() {
     let ipc_port = free_port();
 
     let _ = run_role(
-        env!("CARGO_BIN_EXE_yshell-session-worker"),
+        env!("CARGO_BIN_EXE_gterm-session-worker"),
         &[
             OsStr::new("--config-dir"),
             config.path().as_os_str(),
@@ -327,7 +327,7 @@ fn role_processes_do_not_write_debug_logs_when_disabled() {
             OsStr::new("--ipc-token"),
             OsStr::new("test-token"),
         ],
-        "yshell-session-worker",
+        "gterm-session-worker",
     );
 
     assert!(

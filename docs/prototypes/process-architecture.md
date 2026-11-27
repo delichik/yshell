@@ -22,7 +22,7 @@
 
 ```mermaid
 flowchart TB
-  Entry["yshell（Host 入口）"] -->|"无 Host：成为唯一 Host；已有 Host：请求开新窗后退出"| hostProc
+  Entry["gterm（Host 入口）"] -->|"无 Host：成为唯一 Host；已有 Host：请求开新窗后退出"| hostProc
   subgraph hostProc [HostProcess]
     TabRegistry[tab and window registry]
     Supervisor[worker supervisor]
@@ -41,9 +41,9 @@ flowchart TB
     Win1[window_1]
     Win2[window_2]
   end
-  AiHost["yshell --mcp stdio"] --> McpTcp
+  AiHost["gterm --mcp stdio"] --> McpTcp
   McpTcp <-->|global session API| HostIpc
-  ShellSpawner -->|"spawn yshell-shell --attach"| shells
+  ShellSpawner -->|"spawn gterm-ui --attach"| shells
   Win1 <-->|cmd projection| HostIpc
   Win2 <-->|cmd projection| HostIpc
   Supervisor --> W1
@@ -56,32 +56,32 @@ flowchart TB
 
 ### 入口语义（Host-as-entry）
 
-用户只启动 `yshell.exe`：
+用户只启动 `gterm.exe`：
 
 1. **已有 Host 拥有该 config dir**：请求它开一个新窗（Host 进程内多 Slint 窗），本进程退出；不会出现第二个 Host、第二套 MCP。
-2. **没有 Host**：本进程成为该 config dir 的**全局唯一 Host**（单实例锁），并 spawn 一个 `yshell-shell --attach` GUI 子进程承载窗口。Host 自身 headless、不画 UI。
+2. **没有 Host**：本进程成为该 config dir 的**全局唯一 Host**（单实例锁），并 spawn 一个 `gterm-ui --attach` GUI 子进程承载窗口。Host 自身 headless、不画 UI。
 3. GUI Shell 子进程只做 attach-only：它**不会**自行起 Host；没有 Host 时干净报错退出（Host 会回收该子进程）。
 
 ### CLI / 二进制语义矩阵
 
 | 调用 | 行为 |
 |---|---|
-| `yshell`（默认，无命令 flag） | **Host 入口**：已有 Host → 请求它开新窗后退出（不新起进程树）；无 Host → 成为唯一 Host，并 spawn 一个 `yshell-shell --attach` GUI 子进程 |
-| `yshell --host` | 只以 Host 身份运行，不 spawn Shell（调试 / 测试 / 无 UI 宿主） |
-| `yshell --shell` | ensure Host（不存在则起）后附着一个 GUI 窗口 |
-| `yshell --attach` | attach-only：附着已有 Host；无 Host → 报错退出（Host spawn GUI 子进程用） |
-| `yshell-shell`（默认） | 同 `--attach`（GUI 子进程入口；不自行起 Host） |
-| `yshell-session-worker` / `yshell-mcp-daemon` | Host spawn 的角色子进程；bare 启动缺参数会明确报错 |
+| `gterm`（默认，无命令 flag） | **Host 入口**：已有 Host → 请求它开新窗后退出（不新起进程树）；无 Host → 成为唯一 Host，并 spawn 一个 `gterm-ui --attach` GUI 子进程 |
+| `gterm --host` | 只以 Host 身份运行，不 spawn Shell（调试 / 测试 / 无 UI 宿主） |
+| `gterm --shell` | ensure Host（不存在则起）后附着一个 GUI 窗口 |
+| `gterm --attach` | attach-only：附着已有 Host；无 Host → 报错退出（Host spawn GUI 子进程用） |
+| `gterm-ui`（默认） | 同 `--attach`（GUI 子进程入口；不自行起 Host） |
+| `gterm-session-worker` / `gterm-mcp-daemon` | Host spawn 的角色子进程；bare 启动缺参数会明确报错 |
 | 共享 flag | `--config-dir` / `--version` / `--help` / `--check-config` / `--print-config-dir`；非 GUI 命令会 re-attach 控制台 |
 
 ### 所有权
 
 | 进程 | 拥有 | 不拥有 |
 |---|---|---|
-| **Host 进程（`yshell` 入口，headless）** | 单实例锁（全局唯一 Host）；tab/window 注册表；spawn GUI Shell 子进程；Worker/MCP 监督与**唯一清理权**；向 MCP 暴露全局 session 视图；子进程级联机制 | SSH/PTY、Slint、MCP TCP 监听 |
+| **Host 进程（`gterm` 入口，headless）** | 单实例锁（全局唯一 Host）；tab/window 注册表；spawn GUI Shell 子进程；Worker/MCP 监督与**唯一清理权**；向 MCP 暴露全局 session 视图；子进程级联机制 | SSH/PTY、Slint、MCP TCP 监听 |
 | **SessionWorker** | 单 session 的连接、PTY/SSH、SFTP、终端 grid/日志句柄 | 窗口列表、MCP listen、杀其它 Worker |
 | **McpProcess** | TCP 监听、tool 调度；经 Host 访问全部 session；endpoint 文件 | 绑定某窗；直连 Worker；画 UI |
-| **Shell 进程（`yshell-shell`，GUI 子进程）** | Slint 展示与输入、进程内多 Slint 窗、对话框展示 | session 连接、MCP listen、tab 真相源、杀 Worker、「MCP 宿主」身份；自行起 Host（attach-only） |
+| **Shell 进程（`gterm-ui`，GUI 子进程）** | Slint 展示与输入、进程内多 Slint 窗、对话框展示 | session 连接、MCP listen、tab 真相源、杀 Worker、「MCP 宿主」身份；自行起 Host（attach-only） |
 
 本版不做：一 OS 窗一进程（一个 Shell 进程内仍可多 Slint 窗，对齐现 N7）。
 
@@ -107,7 +107,7 @@ flowchart LR
 | 落点窗关了 | tab 按普通关窗/迁窗规则处理；MCP 仍可按 session id 控制其它/新建到别的窗 |
 | 退出条件 | **零 UI 窗口** → Host 关机序列；不是「MCP 没宿主」 |
 
-`yshell --mcp`（stdio 桥）仍指向 McpProcess 写出的 endpoint；用户不手跑 `--mcp`（对齐 D34）。
+`gterm --mcp`（stdio 桥）仍指向 McpProcess 写出的 endpoint；用户不手跑 `--mcp`（对齐 D34）。
 
 ---
 
@@ -117,7 +117,7 @@ flowchart LR
 
 ### 正常路径
 
-1. **启动 `yshell`**：已有 Host → 请求它开新窗后退出；无 Host → 成为唯一 Host，并 spawn 一个 `yshell-shell --attach` GUI 子进程。
+1. **启动 `gterm`**：已有 Host → 请求它开新窗后退出；无 Host → 成为唯一 Host，并 spawn 一个 `gterm-ui --attach` GUI 子进程。
 2. **关非最后窗**：Host 更新归属；只停本应断开的 Worker。
 3. **Quit 或关到零窗**：Shell 先隐藏全部窗口（含退出确认框），再停日志 → 上报零窗 / `Detach`（此后**不再重连**，避免与 Host 关机竞争）；随后 Host 关机序列（停 McpProcess → 优雅停全部 Worker → 停 Shell 子进程 → 超时强杀 → 清 bridge endpoint → 释单实例锁 → Host 退出）。
 4. **MCP 建连**：全局 API + tab 临时落某窗展示（可带 AI 标志，对齐 D34）。
@@ -131,7 +131,7 @@ flowchart LR
 | 单窗异常退出 | Host 更新 tab 归属；Worker 保留（仍在其它窗或待附着） | MCP 全局视图不变 |
 | **零 UI 窗** | Host **立即**关机序列 | 不把收尸交给已死窗口 |
 | 冷启动残留 | 平台级联 + 子进程 IPC EOF/父进程检测自退；**无持久进程状态文件** | 子进程随 Host 死亡而退出，不需要新 Host 收尸 |
-| 再开 yshell | 单实例锁/桥：请求已有 Host 开新窗（Host 进程内多窗，不起第二套进程树）；无 Host 则起新 Host | 不会第二套 MCP/野 Host |
+| 再开 gterm | 单实例锁/桥：请求已有 Host 开新窗（Host 进程内多窗，不起第二套进程树）；无 Host 则起新 Host | 不会第二套 MCP/野 Host |
 
 ### 子进程级联（Host 死 ⇒ 全部子进程死）
 
@@ -163,7 +163,7 @@ flowchart LR
 
 - SessionWorker 崩/卡 → 该 tab Faulted，可 Reconnect（新 Worker）。
 - McpProcess 崩 → Host 按 Settings 重启或标 Failed；已有 session 保留。
-- Shell 进程崩 → 其窗口消失；零窗 → Host 关机序列清 Worker/MCP。Host 仍存活时，二次启动 `yshell` 可请求开新窗。
+- Shell 进程崩 → 其窗口消失；零窗 → Host 关机序列清 Worker/MCP。Host 仍存活时，二次启动 `gterm` 可请求开新窗。
 - Host 崩 → Windows Job / Linux PDEATHSIG / macOS watchdog 级联杀 GUI Shell + Worker + MCP；下次启动收尸。
 
 ---
@@ -172,12 +172,12 @@ flowchart LR
 
 | 能力 | 现状（单 OS 进程 N7） | 目标 |
 |---|---|---|
-| 启动入口 | `yshell` 既是 GUI 又 ensure Host | `yshell` = Host 入口（headless）；GUI 在 Host spawn 的 `yshell-shell --attach` 子进程 |
+| 启动入口 | `gterm` 既是 GUI 又 ensure Host | `gterm` = Host 入口（headless）；GUI 在 Host spawn 的 `gterm-ui --attach` 子进程 |
 | session I/O | `SessionRuntime` 在 `AppRuntime` 内 | SessionWorker 进程 |
 | tabs / 窗归属 | `AppRuntime::windows` | Host 注册表 |
 | MCP TCP | GUI 内 `WindowManager::reconcile_mcp_server` | McpProcess；落点由 Host 决定 |
 | UI | 同进程 `WindowManager` 多窗 | Shell 进程（内仍可多窗） |
-| `yshell --mcp` | stdio 桥 → GUI 内 TCP | stdio 桥 → McpProcess TCP |
+| `gterm --mcp` | stdio 桥 → GUI 内 TCP | stdio 桥 → McpProcess TCP |
 | 清理 | 随单进程退出 | 零窗 → Host 关机；Job/PDEATHSIG/watchdog + 心跳 + 启动收尸 |
 
 ---
@@ -191,18 +191,18 @@ flowchart LR
 | **Phase 1** | 同进程 Host 门面 / Job / 窗计数关机 | **已落地**：`HostService` 单实例锁（Windows 命名互斥量 / Unix `flock`）、子进程 `try_wait` 回收并同步 `WorkerExited`/`McpExited`、关机序列（停 MCP → 断开 session → 3s 宽限 → 强杀 → 关 bridge）。Shell 连接断开（正常退出、崩溃、被杀、socket reset）都会立即 Detach → 零窗 → 关机，不依赖 45s 心跳超时。Host 的 stderr 追加到 `{config_dir}/host-stderr.log`（detached 进程无控制台，便于诊断 panic/启动失败）。 |
 | **Phase 2** | SessionWorker 真进程 + SSH/终端 IPC | **部分**：终端 Connect → spawn `--session-worker` + loopback NDJSON（Host 监听、worker 回拨）；**SFTP 子系统、终端解析、本地 PTY 仍在 Host**；SFTP-only / `YSHELL_TEST_INPROCESS_SSH` / `cfg(test)` 回同进程。 |
 | **Phase 3** | McpProcess 独立 OS 进程；经 Host bridge 进 AppRuntime | **已落地**：Settings Enable → spawn `--mcp-daemon`，经 bridge 进 Host；崩溃按 Settings 重启。`McpStatus`/`WorkerFaulted` 事件目前只进 `HostEvent` 队列，未推送 Shell（投影状态间接反映）。 |
-| **Phase 4** | Shell/Host 分 OS 进程 + 二次启动附着 | **默认路径可用（含多窗）**：`yshell` = Host 入口（headless；二次启动只请求已有 Host 开新窗）；Host spawn 一个 `yshell-shell --attach` GUI 子进程；`--host` = Host only、`--shell` = ensure Host + 附着、`--attach` = attach-only（无 Host 报错退出）。Shell NDJSON（Attach / UiCall / HostTick / 投影 / snapshot；请求 id 配对、读写超时分级、Host 重启后懒重连 + 重附着）；Shell 进程内多 Slint 窗（Host 单调 window id + tab 归属，move-tab-to-new-window / move-to-main / 关闭次窗 / 二次启动请求已有 Host 开新窗 / 零窗关机）；viewport/DPI 已上报；主窗回调 **202/359**（其余为独立 OS 窗，已在 `remote_dialog_wire.rs` 接线）；Worker 退出/MCP 退出经投影变为 Failed 状态；Shell 不再构造 AppRuntime。远程 OS 窗：解锁 / 密码 / host-key、Settings、主密码子窗、会话编辑器（含步骤 / 隧道）、文件夹默认值、私钥（含子窗）/ 代理 / 终端样式 / Host Keys（含子窗）/ 日志、认证、SFTP 冲突 / 属性 / chmod、About、新建文件夹、SFTP 条目，以及删除 / 关标签 / 退出 / 关窗 / 清 scrollback / MCP consent。未闭环项见 §6.1。`YSHELL_TEST_INPROCESS_HOST=1` = 同进程完整 DialogWindowManager。 |
+| **Phase 4** | Shell/Host 分 OS 进程 + 二次启动附着 | **默认路径可用（含多窗）**：`gterm` = Host 入口（headless；二次启动只请求已有 Host 开新窗）；Host spawn 一个 `gterm-ui --attach` GUI 子进程；`--host` = Host only、`--shell` = ensure Host + 附着、`--attach` = attach-only（无 Host 报错退出）。Shell NDJSON（Attach / UiCall / HostTick / 投影 / snapshot；请求 id 配对、读写超时分级、Host 重启后懒重连 + 重附着）；Shell 进程内多 Slint 窗（Host 单调 window id + tab 归属，move-tab-to-new-window / move-to-main / 关闭次窗 / 二次启动请求已有 Host 开新窗 / 零窗关机）；viewport/DPI 已上报；主窗回调 **202/359**（其余为独立 OS 窗，已在 `remote_dialog_wire.rs` 接线）；Worker 退出/MCP 退出经投影变为 Failed 状态；Shell 不再构造 AppRuntime。远程 OS 窗：解锁 / 密码 / host-key、Settings、主密码子窗、会话编辑器（含步骤 / 隧道）、文件夹默认值、私钥（含子窗）/ 代理 / 终端样式 / Host Keys（含子窗）/ 日志、认证、SFTP 冲突 / 属性 / chmod、About、新建文件夹、SFTP 条目，以及删除 / 关标签 / 退出 / 关窗 / 清 scrollback / MCP consent。未闭环项见 §6.1。`YSHELL_TEST_INPROCESS_HOST=1` = 同进程完整 DialogWindowManager。 |
 
 二进制形态（release 发布 4 个二进制，同目录、同版本）：
 
-- `yshell` = **Host 进程入口**（headless，不画 UI）：已有 Host 时请求开新窗后退出；无 Host 时成为唯一 Host 并 spawn 一个 `yshell-shell --attach`。argv 角色 flag 保留（`--host` / `--shell` / `--attach` / `--session-worker` / `--mcp-daemon` / `--version` / `--help` / `--config-dir` 等）。
-- `yshell-shell` = **GUI Shell 子进程**（Slint；Host spawn，`--attach`；进程内多窗）。
-- `yshell-session-worker` / `yshell-mcp-daemon` = Host spawn 的角色子进程。
-- 每个二进制有独立入口模块（`launcher.rs` 为 `yshell` 入口；`role_shell.rs` / `role_worker.rs` / `role_mcp.rs`）；日志初始化与文件对话框结果模型在 Slint-free 的 `logging_setup.rs` / `dialog_events.rs`，因此 Host/Worker/MCP 进程不会链接 GUI/Slint 代码。
+- `gterm` = **Host 进程入口**（headless，不画 UI）：已有 Host 时请求开新窗后退出；无 Host 时成为唯一 Host 并 spawn 一个 `gterm-ui --attach`。argv 角色 flag 保留（`--host` / `--shell` / `--attach` / `--session-worker` / `--mcp-daemon` / `--version` / `--help` / `--config-dir` 等）。
+- `gterm-ui` = **GUI Shell 子进程**（Slint；Host spawn，`--attach`；进程内多窗）。
+- `gterm-session-worker` / `gterm-mcp-daemon` = Host spawn 的角色子进程。
+- 每个二进制有独立入口模块（`launcher.rs` 为 `gterm` 入口；`role_shell.rs` / `role_worker.rs` / `role_mcp.rs`）；日志初始化与文件对话框结果模型在 Slint-free 的 `logging_setup.rs` / `dialog_events.rs`，因此 Host/Worker/MCP 进程不会链接 GUI/Slint 代码。
 - release profile：`strip = "symbols"` + `lto = "thin"`。不使用角色入口拆分 + LTO 时，Windows-GNU 链接器按 CGU 整块保留（`AppProjection` 的 drop glue 落在 UI 的 CGU 里），角色二进制都会等于完整 GUI 大小。
-- **实测体量（Windows x86_64 GNU dev release，2026-11-13）**：`yshell` 19.52 MB（Host 入口，无 UI）、`yshell-shell` 73.37 MB（GUI）、`yshell-session-worker` 10.71 MB、`yshell-mcp-daemon` 7.65 MB；portable zip 43.36 MB（此前 5 个二进制 / 每片 110.9 MB / zip 139.9 MB）。MSVC release 数字会不同，但相对关系一致。
-- 子进程寻址：`host::roles::role_exe()` 优先同目录 role binary，缺失时回退 `current_exe()` + 角色 flag；Host 角色即入口 `yshell` 自身（`role_exe_name(Host) == "yshell"`）。Windows 角色子进程带 `CREATE_NO_WINDOW`，并加入 Host 的 Job Object。
-- 打包：portable / MSI / DMG / deb / rpm 都安装同一目录下的 4 个二进制（`yshell` Host 入口 + 3 个角色；`xtask dist` / `xtask/src/installers.rs`）。
+- **实测体量（Windows x86_64 GNU dev release，2026-11-13）**：`gterm`（Host 入口，无 UI）、`gterm-ui`（GUI）、`gterm-session-worker`、`gterm-mcp-daemon`（原 `yshell*` 为 19.52 / 73.37 / 10.71 / 7.65 MB，portable zip 43.36 MB）。MSVC release 数字会不同，但相对关系一致。
+- 子进程寻址：`host::roles::role_exe()` 优先同目录 role binary，缺失时回退 `current_exe()` + 角色 flag；Host 角色即入口 `gterm` 自身（`role_exe_name(Host) == "gterm"`）。Windows 角色子进程带 `CREATE_NO_WINDOW`，并加入 Host 的 Job Object。
+- 打包：portable / MSI / DMG / deb / rpm 都安装同一目录下的 4 个二进制（`gterm` Host 入口 + 3 个角色；`xtask dist` / `xtask/src/installers.rs`）。
 
 `YSHELL_TEST_INPROCESS_HOST=1`：同进程 Host 门面 + 完整 WindowManager；`YSHELL_TEST_INPROCESS_SSH=1`：SSH 连接留在 Host（调试用）。
 
@@ -212,11 +212,11 @@ flowchart LR
 
 - `cargo check --workspace --all-targets --locked`
 - `cargo test -p yshell-app --lib -- host::`（IPC 死锁/连接断开关机回归 / 单实例锁 / 存活检测 / Job）
-- `cargo test -p yshell-app --test role_binaries`（进程级：`yshell` 入口的 `--version`/`--help`/`--print-config-dir`；3 个角色二进制的 metadata 命令；bare SessionWorker / McpDaemon 参数报错；无 Host 时 bare GUI Shell 干净失败且不开窗）
+- `cargo test -p yshell-app --test role_binaries`（进程级：`gterm` 入口的 `--version`/`--help`/`--print-config-dir`；3 个角色二进制的 metadata 命令；bare SessionWorker / McpDaemon 参数报错；无 Host 时 bare GUI Shell 干净失败且不开窗）
 - `cargo test -p yshell-app --test role_debug_logging`（进程级：debug 开关开启时 SessionWorker / MCP daemon / GUI Shell 各写自身 `logs/yshell-*-debug.log` 且含生命周期与失败细节；已启动 Worker 跟随运行中的开关；关闭时不创建日志目录）
-- `cargo test -p yshell-app --test host_process_smoke`（真实 `yshell --host`：起 Host → 附着 → 零窗关机 → 无残留状态文件）
+- `cargo test -p yshell-app --test host_process_smoke`（真实 `gterm --host`：起 Host → 附着 → 零窗关机 → 无残留状态文件）
 - `cargo test -p xtask`（dist/MSI 模板等）
-- 真实 GUI 冒烟（开发者本机）：`yshell --config-dir <tmp>` → 出窗（标题 YShell）+ `yshell-shell` 子进程；再次 `yshell` → 已有 Host 开新窗；正常关窗 → Host 关机、全部子进程退出、bridge 清理；硬杀 Host → 级联杀 Shell/Worker/MCP；硬杀 Shell → Host Detach → 零窗关机。
+- 真实 GUI 冒烟（开发者本机）：`gterm --config-dir <tmp>` → 出窗（标题 gTerm）+ `gterm-ui` 子进程；再次 `gterm` → 已有 Host 开新窗；正常关窗 → Host 关机、全部子进程退出、bridge 清理；硬杀 Host → 级联杀 Shell/Worker/MCP；硬杀 Shell → Host Detach → 零窗关机。
 - 构建提示：Windows GNU dev 构建现在也带 16MB 栈（`build.rs` 对 msvc `-Wl`/`/STACK` 两个 toolchain 都发）；否则 Host/Slint 主线程会 1MB 栈溢出（表现为 Host 启动 ~0.3s 后 JSON 文件残留、Shell 报 connection refused）。
 
 ### 6.1 尚未闭环（按优先级）

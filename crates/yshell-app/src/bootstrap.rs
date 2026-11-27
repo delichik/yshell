@@ -2789,7 +2789,7 @@ pub(crate) fn wire_callbacks(
                     dialog_tx.clone(),
                     DialogKind::PublicKeyExport,
                     "Export public key",
-                    "yshell-public-key.pub",
+                    "gterm-public-key.pub",
                     text,
                 ),
                 Err(error) => {
@@ -2849,7 +2849,7 @@ pub(crate) fn wire_callbacks(
                 dialog_tx.clone(),
                 DialogKind::HostKeysExport,
                 "Export host keys",
-                "yshell-known-hosts.txt",
+                "gterm-known-hosts.txt",
                 text,
             );
         });

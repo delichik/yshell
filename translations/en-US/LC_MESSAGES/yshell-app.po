@@ -289,8 +289,8 @@ msgstr "Logging..."
 
 #: ui/main_window.slint:1543
 msgctxt "MainWindow"
-msgid "About YShell"
-msgstr "About YShell"
+msgid "About gTerm"
+msgstr "About gTerm"
 
 #: ui/main_window.slint:1553
 msgctxt "MainWindow"
@@ -641,8 +641,8 @@ msgstr "Pick a method the server accepts. You can switch and retry without losin
 
 #: ui/components/auth_prompt_dialog.slint:189
 msgctxt "AuthPromptDialog"
-msgid "The server does not offer any authentication method YShell supports."
-msgstr "The server does not offer any authentication method YShell supports."
+msgid "The server does not offer any authentication method gTerm supports."
+msgstr "The server does not offer any authentication method gTerm supports."
 
 #: ui/components/auth_prompt_dialog.slint:197
 msgctxt "AuthPromptDialog"
@@ -2073,8 +2073,8 @@ msgstr "AI"
 
 #: ui/pages/about.slint:70
 msgctxt "AboutDialog"
-msgid "About YShell"
-msgstr "About YShell"
+msgid "About gTerm"
+msgstr "About gTerm"
 
 #: ui/pages/about.slint:80 ui/pages/about.slint:161
 msgctxt "AboutDialog"
@@ -2083,13 +2083,13 @@ msgstr "Close"
 
 #: ui/pages/about.slint:91
 msgctxt "AboutDialog"
-msgid "YShell {0}"
-msgstr "YShell {0}"
+msgid "gTerm {0}"
+msgstr "gTerm {0}"
 
 #: ui/pages/about.slint:97
 msgctxt "AboutDialog"
-msgid "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
-msgstr "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
+msgid "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
+msgstr "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
 
 #: ui/pages/about.slint:111
 msgctxt "AboutDialog"
@@ -3092,8 +3092,8 @@ msgstr "Confirm quit"
 
 #: ui/pages/settings.slint:508
 msgctxt "SettingsDialog"
-msgid "Ask before quitting YShell."
-msgstr "Ask before quitting YShell."
+msgid "Ask before quitting gTerm."
+msgstr "Ask before quitting gTerm."
 
 #: ui/pages/settings.slint:512 ui/pages/settings.slint:515
 msgctxt "SettingsDialog"
@@ -3747,8 +3747,8 @@ msgstr "Terminal: {0}"
 
 #: ui/text_formats.slint:75
 msgctxt "MainWindow"
-msgid "YShell terminal"
-msgstr "YShell terminal"
+msgid "gTerm terminal"
+msgstr "gTerm terminal"
 
 #: ui/text_formats.slint:80
 msgctxt "MainWindow"
@@ -6622,18 +6622,18 @@ msgstr "No Proxy"
 
 #: ui/windows/about_window.slint:14 ui/windows/about_window.slint:54
 msgctxt "AboutWindow"
-msgid "About YShell"
-msgstr "About YShell"
+msgid "About gTerm"
+msgstr "About gTerm"
 
 #: ui/windows/about_window.slint:68
 msgctxt "AboutWindow"
-msgid "YShell {0}"
-msgstr "YShell {0}"
+msgid "gTerm {0}"
+msgstr "gTerm {0}"
 
 #: ui/windows/about_window.slint:77
 msgctxt "AboutWindow"
-msgid "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
-msgstr "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
+msgid "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
+msgstr "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
 
 #: ui/windows/about_window.slint:89
 msgctxt "AboutWindow"
@@ -6932,8 +6932,8 @@ msgstr "Quit"
 
 #: ui/windows/master_password_unlock_window.slint:151
 msgctxt "MasterPasswordUnlockWindow"
-msgid "Quit YShell without unlocking"
-msgstr "Quit YShell without unlocking"
+msgid "Quit gTerm without unlocking"
+msgstr "Quit gTerm without unlocking"
 
 #: ui/windows/master_password_unlock_window.slint:155
 msgctxt "MasterPasswordUnlockWindow"

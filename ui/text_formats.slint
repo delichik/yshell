@@ -72,7 +72,7 @@ export global TextFormats {
     public pure function terminal-title-display(has_session: bool, name: string) -> string {
         return has_session
             ? @tr("MainWindow" => "Terminal: {0}", name)
-            : @tr("MainWindow" => "YShell terminal");
+            : @tr("MainWindow" => "gTerm terminal");
     }
 
     public pure function terminal-body-display(kind: string, body: string) -> string {

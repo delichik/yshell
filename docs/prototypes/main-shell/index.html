@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Main window UI</title>
+  <title>gTerm — Main window UI</title>
   <link rel="stylesheet" href="../form.css">
   <link rel="stylesheet" href="../_anno.css">
   <link rel="stylesheet" href="../_chrome.css">
@@ -294,7 +294,7 @@
   <div class="proto-stage" style="margin-bottom:12px">
     <div style="display:flex;flex-direction:column;gap:6px;width:720px">
       <iframe class="proto-embed proto-embed--titlebar" data-proto-embed title="titlebar-main"
-        src="../components/titlebar-main.html?embed=1&amp;title=YShell"></iframe>
+        src="../components/titlebar-main.html?embed=1&amp;title=gTerm"></iframe>
       <iframe class="proto-embed proto-embed--menubar" data-proto-embed title="menubar"
         src="../components/menubar.html?embed=1"></iframe>
       <iframe class="proto-embed proto-embed--tabbar" data-proto-embed title="tabbar"
@@ -334,9 +334,10 @@
   </div>
 
   <div class="stage">
-    <div class="win win-main" id="win" role="application" aria-label="YShell main window">
+    <div class="win win-main" id="win" role="application" aria-label="gTerm main window">
       <div class="titlebar">
         <div class="menus" aria-label="Application menus">
+          <img class="app-icon" src="../../../assets/icons/svg/gterm.svg" alt="" />
           <button type="button" class="menu-btn" data-menu="file" aria-haspopup="true" aria-expanded="false" title="File">File</button>
           <button type="button" class="menu-btn" data-menu="edit" aria-haspopup="true" aria-expanded="false" title="Edit">Edit</button>
           <button type="button" class="menu-btn" data-menu="session" aria-haspopup="true" aria-expanded="false" title="Session">Session</button>
@@ -676,7 +677,7 @@
           menuItem("Proxies", "", "tools-proxies") +
           menuItem("管理终端样式", "", "tools-theme") +
           menuItem("Logging", "", "tools-logging"),
-        help: menuItem("About YShell", "", "help-about")
+        help: menuItem("About gTerm", "", "help-about")
       };
 
       document.querySelectorAll(".menu-btn[data-menu]").forEach(function (btn) {

@@ -2357,7 +2357,7 @@ pub(crate) fn preview_lines(palette: TerminalPalette, language: &str) -> Vec<Vec
     status.extend(line("| failed", palette.ansi(9)));
     let [language_line, cjk_line] = preview_language_lines(preview_sample_language(language));
     vec![
-        line("YShell terminal theme preview", palette.foreground),
+        line("gTerm terminal theme preview", palette.foreground),
         prompt,
         listing,
         ansi,

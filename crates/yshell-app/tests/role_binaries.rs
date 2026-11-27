@@ -95,26 +95,26 @@ fn run_expecting_exit(exe: &str, args: &[&OsStr], context: &str, timeout: Durati
 
 #[test]
 fn host_entry_reports_version_help_and_config_dir() {
-    // `yshell` is the Host entry: only metadata commands are safe to run here.
-    let version = run(env!("CARGO_BIN_EXE_yshell"), &["--version"]);
-    assert_success("yshell", &version, "--version");
+    // `gterm` is the Host entry: only metadata commands are safe to run here.
+    let version = run(env!("CARGO_BIN_EXE_gterm"), &["--version"]);
+    assert_success("gterm", &version, "--version");
     let stdout = String::from_utf8_lossy(&version.stdout);
     assert!(
-        stdout.contains("yshell"),
-        "yshell --version should print the product/version label, got: {stdout:?}"
+        stdout.contains("gterm"),
+        "gterm --version should print the product/version label, got: {stdout:?}"
     );
 
-    let help = run(env!("CARGO_BIN_EXE_yshell"), &["--help"]);
-    assert_success("yshell", &help, "--help");
+    let help = run(env!("CARGO_BIN_EXE_gterm"), &["--help"]);
+    assert_success("gterm", &help, "--help");
     let stdout = String::from_utf8_lossy(&help.stdout);
     assert!(
-        stdout.contains("YShell") && stdout.contains("USAGE"),
-        "yshell --help should print the shared CLI help, got: {stdout:?}"
+        stdout.contains("gTerm") && stdout.contains("USAGE"),
+        "gterm --help should print the shared CLI help, got: {stdout:?}"
     );
 
     let config_dir = tempfile::tempdir().expect("tempdir");
     let output = run_expecting_exit(
-        env!("CARGO_BIN_EXE_yshell"),
+        env!("CARGO_BIN_EXE_gterm"),
         &[
             OsStr::new("--config-dir"),
             config_dir.path().as_os_str(),
@@ -125,26 +125,26 @@ fn host_entry_reports_version_help_and_config_dir() {
     );
     assert!(
         output.status.success(),
-        "yshell --print-config-dir failed with {}: {}",
+        "gterm --print-config-dir failed with {}: {}",
         output.status,
         output.stderr
     );
     assert_eq!(
         output.stdout.trim(),
         config_dir.path().to_string_lossy().as_ref(),
-        "yshell must honour --config-dir"
+        "gterm must honour --config-dir"
     );
 }
 
 #[test]
 fn role_binaries_report_version_and_help() {
     let binaries = [
-        ("yshell-shell", env!("CARGO_BIN_EXE_yshell-shell")),
+        ("gterm-ui", env!("CARGO_BIN_EXE_gterm-ui")),
         (
-            "yshell-session-worker",
-            env!("CARGO_BIN_EXE_yshell-session-worker"),
+            "gterm-session-worker",
+            env!("CARGO_BIN_EXE_gterm-session-worker"),
         ),
-        ("yshell-mcp-daemon", env!("CARGO_BIN_EXE_yshell-mcp-daemon")),
+        ("gterm-mcp-daemon", env!("CARGO_BIN_EXE_gterm-mcp-daemon")),
     ];
 
     for (name, exe) in binaries {
@@ -152,7 +152,7 @@ fn role_binaries_report_version_and_help() {
         assert_success(name, &version, "--version");
         let stdout = String::from_utf8_lossy(&version.stdout);
         assert!(
-            stdout.contains("yshell"),
+            stdout.contains("gterm"),
             "{name} --version should print the product/version label, got: {stdout:?}"
         );
 
@@ -160,7 +160,7 @@ fn role_binaries_report_version_and_help() {
         assert_success(name, &help, "--help");
         let stdout = String::from_utf8_lossy(&help.stdout);
         assert!(
-            stdout.contains("YShell") && stdout.contains("USAGE"),
+            stdout.contains("gTerm") && stdout.contains("USAGE"),
             "{name} --help should print the shared CLI help, got: {stdout:?}"
         );
     }
@@ -169,14 +169,14 @@ fn role_binaries_report_version_and_help() {
 #[test]
 fn session_worker_binary_fails_clearly_without_spawn_arguments() {
     let output = run_expecting_exit(
-        env!("CARGO_BIN_EXE_yshell-session-worker"),
+        env!("CARGO_BIN_EXE_gterm-session-worker"),
         &[],
         "with no arguments",
         EXIT_TIMEOUT,
     );
     assert!(
         !output.status.success(),
-        "a bare yshell-session-worker must exit non-zero"
+        "a bare gterm-session-worker must exit non-zero"
     );
     let stderr = output.stderr;
     assert!(
@@ -188,14 +188,14 @@ fn session_worker_binary_fails_clearly_without_spawn_arguments() {
 #[test]
 fn mcp_daemon_binary_fails_clearly_without_a_token() {
     let output = run_expecting_exit(
-        env!("CARGO_BIN_EXE_yshell-mcp-daemon"),
+        env!("CARGO_BIN_EXE_gterm-mcp-daemon"),
         &[],
         "with no arguments",
         EXIT_TIMEOUT,
     );
     assert!(
         !output.status.success(),
-        "a bare yshell-mcp-daemon must exit non-zero"
+        "a bare gterm-mcp-daemon must exit non-zero"
     );
     let stderr = output.stderr;
     assert!(
@@ -211,21 +211,21 @@ fn shell_binary_without_a_host_fails_cleanly_without_opening_a_gui() {
     // to, so it must report that and exit instead of opening a window.
     let config_dir = tempfile::tempdir().expect("tempdir");
     let output = run_expecting_exit(
-        env!("CARGO_BIN_EXE_yshell-shell"),
+        env!("CARGO_BIN_EXE_gterm-ui"),
         &[OsStr::new("--config-dir"), config_dir.path().as_os_str()],
         "with an empty config dir (no Host)",
         SHELL_NO_HOST_TIMEOUT,
     );
     assert!(
         !output.status.success(),
-        "yshell-shell without a Host must exit non-zero, got {}; output: {}",
+        "gterm-ui without a Host must exit non-zero, got {}; output: {}",
         output.status,
         output.combined_output()
     );
     let combined = output.combined_output().to_ascii_lowercase();
     assert!(
         !combined.trim().is_empty(),
-        "yshell-shell must explain why it cannot start, not fail silently"
+        "gterm-ui must explain why it cannot start, not fail silently"
     );
     assert!(
         combined.contains("host") || combined.contains("attach"),
@@ -233,6 +233,6 @@ fn shell_binary_without_a_host_fails_cleanly_without_opening_a_gui() {
     );
     assert!(
         !combined.contains("panicked"),
-        "yshell-shell must fail cleanly, got: {combined:?}"
+        "gterm-ui must fail cleanly, got: {combined:?}"
     );
 }

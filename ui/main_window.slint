@@ -63,7 +63,8 @@ export { SftpChmodWindow } from "windows/sftp_chmod_window.slint";
 // NewFolderDialog 已搬到 components/session_sidebar.slint（独立 OS 窗口见 windows/new_folder_window.slint）。
 
 export component MainWindow inherits Window {
-    title: "YShell";
+    title: "gTerm";
+    icon: @image-url("icons/brand/gterm-256.png");
     // 阶段 B：自绘标题栏（无系统装饰）。拖动/窗口按钮见 components/menu_bar.slint；
     // 无框时可拖边缩放（winit）。关闭走 close() → on_close_requested（既有确认）。
     // resize-border-width：边沿命中带；过窄时难抓，8px 与常见无框窗一致。
@@ -264,7 +265,7 @@ export component MainWindow inherits Window {
     in-out property <string> host_key_prompt_expected_algorithm_text: "";
     in-out property <string> host_key_prompt_expected_fingerprint_text: "";
     in-out property <string> tab_text: "Welcome  idle";
-    in-out property <string> terminal_title_text: "YShell terminal";
+    in-out property <string> terminal_title_text: "gTerm terminal";
     in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +.";
     in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a local terminal tab with +."];
     in-out property <image> terminal_image;
@@ -1542,7 +1543,7 @@ export component MainWindow inherits Window {
         }
     ];
     property <[MenuEntry]> help_menu_entries: [
-        { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("About gTerm"), shortcut: "", enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> terminal_context_menu_entries: [
         // WP2：契约 §7.2 日常项 + N6 日志 + N9 同步。索引见 dispatch_context_menu(which==4)。

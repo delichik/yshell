@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="../_chrome.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — About UI</title>
+  <title>gTerm — About UI</title>
   <link rel="stylesheet" href="../_anno.css">
   <link rel="stylesheet" href="../_icons.css">
   <style>
@@ -70,6 +70,17 @@
     }
     .region { position: relative; }
 
+    .product-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .product-logo {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
+      display: block;
+    }
     .product-name {
       margin: 0;
       font-size: 18px;
@@ -151,15 +162,20 @@
     <div class="frame">
       <div class="win win-standard" id="about-win" role="dialog">
         <div class="titlebar region">
-          <div class="title">About YShell</div>
+          <div class="title">About gTerm</div>
           <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
         </div>
 
         <div class="body">
           <div class="region">
             <span class="tag">A · copy</span>
-            <p class="product-name">YShell 0.4.0-dev</p>
-            <p class="blurb">A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.</p>
+            <div class="product-header">
+              <img class="product-logo" src="../../../assets/icons/svg/gterm.svg" alt="gTerm" />
+              <div>
+                <p class="product-name">gTerm 0.4.0-dev</p>
+                <p class="blurb">A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows.</p>
+              </div>
+            </div>
           </div>
 
           <div class="grid region">

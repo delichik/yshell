@@ -1,5 +1,5 @@
 id = "yshell-default"
-name = "YShell Default"
+name = "gTerm Default"
 foreground = "#d8dee9"
 background = "#05070b"
 cursor = "#d8dee9"

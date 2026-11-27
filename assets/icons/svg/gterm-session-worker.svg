@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="wk-card" x1="0" y1="16" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+    <linearGradient id="bd-bg" x1="0" y1="0" x2="224" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#090E1A"/>
+    </linearGradient>
+    <linearGradient id="bd-rim" x1="0" y1="0" x2="0" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#64748B" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.65"/>
+    </linearGradient>
+    <linearGradient id="bd-chev" x1="44" y1="70" x2="102" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7EDEFF"/>
+      <stop offset="100%" stop-color="#0078D4"/>
+    </linearGradient>
+    <linearGradient id="bd-bar" x1="108" y1="154" x2="158" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#BAE6FD"/>
+    </linearGradient>
+    <mask id="badge-cutout">
+      <rect width="256" height="256" fill="#FFFFFF"/>
+      <rect x="112.5" y="112.5" width="143" height="143" rx="36" fill="#000000"/>
+    </mask>
+  </defs>
+  <g mask="url(#badge-cutout)">
+    <rect x="14" y="18" width="188" height="176" rx="26" fill="url(#wk-card)" stroke="#64748B" stroke-opacity="0.85" stroke-width="5"/>
+    <path d="M48 66 L96 102 L48 138" stroke="#334155" stroke-opacity="0.92" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="108" y1="134" x2="162" y2="134" stroke="#334155" stroke-opacity="0.92" stroke-width="19" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(122, 122) scale(0.5535714)">
+    <rect x="0" y="0" width="224" height="224" rx="48" fill="url(#bd-bg)"/>
+    <path d="M44 70 L102 114 L44 158" stroke="url(#bd-chev)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="108" y1="154" x2="158" y2="154" stroke="url(#bd-bar)" stroke-width="26" stroke-linecap="round"/>
+    <circle cx="174" cy="154" r="21" fill="#38BDF8"/>
+    <circle cx="174" cy="154" r="8" fill="#E0F2FE"/>
+    <rect x="2.75" y="2.75" width="218.5" height="218.5" rx="45.25" stroke="url(#bd-rim)" stroke-width="5.5"/>
+  </g>
+</svg>

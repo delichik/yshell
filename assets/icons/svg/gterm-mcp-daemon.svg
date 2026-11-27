@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="mcp-card" x1="0" y1="16" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+    <linearGradient id="bd-bg" x1="0" y1="0" x2="224" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#090E1A"/>
+    </linearGradient>
+    <linearGradient id="bd-rim" x1="0" y1="0" x2="0" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#64748B" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.65"/>
+    </linearGradient>
+    <linearGradient id="bd-chev" x1="44" y1="70" x2="102" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7EDEFF"/>
+      <stop offset="100%" stop-color="#0078D4"/>
+    </linearGradient>
+    <linearGradient id="bd-bar" x1="108" y1="154" x2="158" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#BAE6FD"/>
+    </linearGradient>
+    <mask id="badge-cutout">
+      <rect width="256" height="256" fill="#FFFFFF"/>
+      <rect x="112.5" y="112.5" width="143" height="143" rx="36" fill="#000000"/>
+    </mask>
+  </defs>
+  <g mask="url(#badge-cutout)">
+    <rect x="14" y="14" width="188" height="188" rx="28" fill="url(#mcp-card)" stroke="#64748B" stroke-opacity="0.85" stroke-width="5"/>
+    <line x1="104" y1="104" x2="56" y2="62" stroke="#64748B" stroke-opacity="0.88" stroke-width="12" stroke-linecap="round"/>
+    <line x1="104" y1="104" x2="156" y2="62" stroke="#64748B" stroke-opacity="0.88" stroke-width="12" stroke-linecap="round"/>
+    <line x1="104" y1="104" x2="56" y2="150" stroke="#64748B" stroke-opacity="0.88" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="104" cy="104" r="26" stroke="#334155" stroke-opacity="0.55" stroke-width="9"/>
+    <circle cx="56" cy="62" r="13.5" fill="#334155" fill-opacity="0.92"/>
+    <circle cx="156" cy="62" r="13.5" fill="#334155" fill-opacity="0.92"/>
+    <circle cx="56" cy="150" r="13.5" fill="#334155" fill-opacity="0.92"/>
+    <circle cx="104" cy="104" r="18" fill="#334155"/>
+  </g>
+  <g transform="translate(122, 122) scale(0.5535714)">
+    <rect x="0" y="0" width="224" height="224" rx="48" fill="url(#bd-bg)"/>
+    <path d="M44 70 L102 114 L44 158" stroke="url(#bd-chev)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="108" y1="154" x2="158" y2="154" stroke="url(#bd-bar)" stroke-width="26" stroke-linecap="round"/>
+    <circle cx="174" cy="154" r="21" fill="#38BDF8"/>
+    <circle cx="174" cy="154" r="8" fill="#E0F2FE"/>
+    <rect x="2.75" y="2.75" width="218.5" height="218.5" rx="45.25" stroke="url(#bd-rim)" stroke-width="5.5"/>
+  </g>
+</svg>

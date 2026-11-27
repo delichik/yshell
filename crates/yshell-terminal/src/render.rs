@@ -498,9 +498,11 @@ pub fn resolve_fonts_dir() -> PathBuf {
     }
     #[cfg(target_os = "linux")]
     {
-        let system = PathBuf::from("/usr/share/yshell/fonts");
-        if system.is_dir() {
-            return system;
+        for dir in ["/usr/share/gterm/fonts", "/usr/share/yshell/fonts"] {
+            let system = PathBuf::from(dir);
+            if system.is_dir() {
+                return system;
+            }
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")

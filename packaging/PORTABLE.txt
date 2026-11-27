@@ -1,26 +1,29 @@
-YShell portable build
-=====================
+gTerm portable build
+====================
 
 This archive is a portable build: there is no installer, no registry writes,
 and no system-wide files. Extract it anywhere and run the binary.
 
 Contents
-  yshell / yshell.exe   Main application binary.
+  gterm / gterm.exe     Main application binary (Host entry).
+  gterm-ui*             GUI process binary spawned by `gterm`.
+  gterm-session-worker* Isolated session worker binary spawned by `gterm`.
+  gterm-mcp-daemon*     Standalone MCP listener binary spawned by `gterm`.
   fonts/                Product-shipped open-source terminal fonts (not
                         embedded in the executable; loaded from this folder).
   themes/               Product-shipped terminal color schemes (TOML; not
                         embedded in the executable; loaded from this folder).
-  yshell-portable.cmd   Windows launcher that keeps YShell data in .\data next
+  gterm-portable.cmd    Windows launcher that keeps gTerm data in .\data next
     to this file (green/portable mode).
-  yshell-portable.sh    Linux/macOS launcher that keeps YShell data in ./data.
+  gterm-portable.sh     Linux/macOS launcher that keeps gTerm data in ./data.
   README.md, LICENSE    Project documentation and license.
   PORTABLE.txt          This file.
   BUILD.txt             Version, target, toolchain and commit of this build.
 
 Run without a launcher
-  Windows:   yshell.exe --config-dir <folder>
-  Linux:     chmod +x ./yshell && ./yshell --config-dir <folder>
-  macOS:     chmod +x ./yshell && ./yshell --config-dir <folder>
+  Windows:   gterm.exe --config-dir <folder>
+  Linux:     chmod +x ./gterm && ./gterm --config-dir <folder>
+  macOS:     chmod +x ./gterm && ./gterm --config-dir <folder>
 
 Data locations
   Default (non-portable):
@@ -31,14 +34,14 @@ Data locations
     <this folder>/data (passed to the app as `--config-dir`)
   `--config-dir <folder>` selects the configuration directory for any launch
   (it is also what test / smoke runs use). Application configuration is read
-  from that directory only: YShell does not use YSHELL_* environment variables.
+  from that directory only: gTerm does not use environment variables for config.
 
 Notes
   - Secrets are stored in the OS keychain by default. The local encrypted file
     store is not selected through an environment variable; master-password /
     secret-store behaviour is configured in the app.
   - macOS: unsigned binaries are quarantined after download. Remove the
-    quarantine flag with: xattr -d com.apple.quarantine ./yshell
+    quarantine flag with: xattr -d com.apple.quarantine ./gterm
   - Linux: requires the X11/XCB runtime libraries (libx11, libxcb).
   - Verify your download against the SHA256SUMS.txt published next to this
     archive.

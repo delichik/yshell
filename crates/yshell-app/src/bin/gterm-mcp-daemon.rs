@@ -1,4 +1,4 @@
-//! MCP daemon role binary (`yshell-mcp-daemon`).
+//! MCP daemon role binary (`gterm-mcp-daemon`).
 
 // Daemon children are spawned with stdio null; keep them console-less.
 #![cfg_attr(windows, windows_subsystem = "windows")]

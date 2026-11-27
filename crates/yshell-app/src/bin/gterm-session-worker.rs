@@ -1,4 +1,4 @@
-//! SessionWorker role binary (`yshell-session-worker`).
+//! SessionWorker role binary (`gterm-session-worker`).
 
 // Worker children are spawned with stdio null; keep them console-less.
 #![cfg_attr(windows, windows_subsystem = "windows")]

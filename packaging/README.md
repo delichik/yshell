@@ -6,11 +6,11 @@ not by the app at runtime.
 
 | Path | Used for |
 |---|---|
-| `PORTABLE.txt`, `yshell-portable.cmd`, `yshell-portable.sh` | Portable archives: documentation and launchers that keep data in `./data` |
-| `windows/yshell.wxs` | WiX v3 source for the MSI installer (`--formats msi`) |
-| `macos/Info.plist` | `Info.plist` for the `YShell.app` bundle inside the DMG (`--formats dmg`) |
-| `linux/yshell.desktop` | Desktop entry installed by the deb/rpm packages |
-| `linux/yshell.spec.in` | RPM spec template (`--formats rpm`) |
+| `PORTABLE.txt`, `gterm-portable.cmd`, `gterm-portable.sh` | Portable archives: documentation and launchers that keep data in `./data` |
+| `windows/gterm.wxs` | WiX v3 source for the MSI installer (`--formats msi`) |
+| `macos/Info.plist` | `Info.plist` for the `gTerm.app` bundle inside the DMG (`--formats dmg`) |
+| `linux/gterm.desktop` | Desktop entry installed by the deb/rpm packages |
+| `linux/gterm.spec.in` | RPM spec template (`--formats rpm`) |
 
 The deb metadata lives in `[package.metadata.deb]` in
 `crates/yshell-app/Cargo.toml`.
@@ -43,11 +43,10 @@ produced without touching other content in `dist/`).
 
 ## Current limitations
 
-- **No icons yet.** `assets/icons/` is still a placeholder, so installers use
-  the platform default icon. `packaging/macos/Info.plist` already looks for
-  `assets/icons/yshell.icns`; add the icon files and the bundle picks it up.
 - **Unsigned.** The MSI, DMG, deb and rpm artifacts are not signed; Windows
   SmartScreen and macOS Gatekeeper will warn on first launch. Code signing and
   notarization are tracked as follow-up work.
-- **AppImage is not built.** It needs an icon and FUSE, and the deb/rpm
-  packages already cover Linux desktops.
+- **AppImage is not built.** It needs FUSE, and the deb/rpm packages already
+  cover Linux desktops. Application icons live under `assets/icons/` (generated
+  via `python scripts/app-icons/generate.py`) and are embedded in Windows PE
+  resources, MSI, DMG, and deb/rpm packages.

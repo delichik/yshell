@@ -55,7 +55,7 @@ impl ColorTheme {
     pub fn yshell_default() -> Self {
         Self {
             id: DEFAULT_THEME_ID.to_owned(),
-            name: "YShell Default".to_owned(),
+            name: "gTerm Default".to_owned(),
             foreground: "#d8dee9".to_owned(),
             background: "#05070b".to_owned(),
             cursor: "#d8dee9".to_owned(),
@@ -362,9 +362,11 @@ pub fn resolve_shipped_themes_dir() -> PathBuf {
     }
     #[cfg(target_os = "linux")]
     {
-        let system = PathBuf::from("/usr/share/yshell/themes");
-        if system.is_dir() {
-            return system;
+        for dir in ["/usr/share/gterm/themes", "/usr/share/yshell/themes"] {
+            let system = PathBuf::from(dir);
+            if system.is_dir() {
+                return system;
+            }
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/themes")

@@ -1,4 +1,4 @@
-//! GUI Shell role binary (`yshell-shell`).
+//! GUI Shell role binary (`gterm-ui`).
 
 // GUI process: never show a console window.
 #![cfg_attr(windows, windows_subsystem = "windows")]

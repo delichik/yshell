@@ -777,7 +777,7 @@ impl WindowManager {
                 runtime.set_status_kind(
                     "mcp-listener-ready",
                     format!(
-                        "MCP daemon ready on {bind_host}:{port}. Point your AI host at yshell --mcp."
+                        "MCP daemon ready on {bind_host}:{port}. Point your AI host at gterm --mcp."
                     ),
                     port.to_string(),
                     String::new(),

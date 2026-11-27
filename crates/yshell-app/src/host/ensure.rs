@@ -128,7 +128,7 @@ pub fn spawn_shell(config_dir: &Path) -> AppResult<std::process::Child> {
         .is_some_and(|current| current == exe)
     {
         return Err(AppError::new(
-            "GUI Shell binary `yshell-shell` is missing next to the Host entry; \
+            "GUI Shell binary `gterm-ui` is missing next to the Host entry; \
              build the workspace binaries (`cargo xtask build`) or reinstall",
         ));
     }

@@ -132,9 +132,9 @@ pub fn test(ctx: &Context, options: &TestOptions) -> Result<()> {
 /// Run the native app from source.
 pub fn run_app(ctx: &Context, options: &RunOptions) -> Result<()> {
     let mut command = context::cargo(ctx);
-    // Several role binaries live in yshell-app; `yshell` stays the user-facing
+    // Several role binaries live in yshell-app; `gterm` stays the user-facing
     // entry, so select it explicitly instead of relying on cargo's default.
-    command.args(["run", "--locked", "-p", "yshell-app", "--bin", "yshell"]);
+    command.args(["run", "--locked", "-p", "yshell-app", "--bin", "gterm"]);
     if options.release {
         command.arg("--release");
     }
@@ -169,8 +169,10 @@ pub fn clean(ctx: &Context, options: &CleanOptions) -> Result<()> {
             let name = entry.file_name().to_string_lossy().into_owned();
             // Only touch what `cargo xtask dist` produces; other content in
             // dist/ (screenshots, scratch dirs) belongs to the developer.
-            let produced_by_dist =
-                name == ".work" || name == "SHA256SUMS.txt" || name.starts_with("yshell-");
+            let produced_by_dist = name == ".work"
+                || name == "SHA256SUMS.txt"
+                || name.starts_with("gterm-")
+                || name.starts_with("yshell-");
             if !produced_by_dist {
                 continue;
             }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  WiX v3 source for the YShell MSI, rendered by `cargo xtask dist` with the
+  WiX v3 source for the gTerm MSI, rendered by `cargo xtask dist` with the
   msi format selected (see xtask/src/installers.rs). @VERSION@ is a three part
   numeric version, @BINARY@/@SHELL_BIN@/@SESSION_WORKER_BIN@/@MCP_DAEMON_BIN@/
-  @README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@/@THEMES_DIR@ are absolute paths.
-  `@BINARY@` is the headless Host entry (yshell.exe); the role executables (GUI
-  Shell, SessionWorker, MCP daemon) are installed in INSTALLFOLDER beside it
+  @README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@/@THEMES_DIR@/@ICON@ are absolute paths.
+  `@BINARY@` is the headless Host entry (gterm.exe); the role executables (GUI
+  UI, SessionWorker, MCP daemon) are installed in INSTALLFOLDER beside it
   because the Host spawns them as children in the same directory. Fonts must sit
   beside the exe as INSTALLFOLDER\fonts\ — see resolve_fonts_dir() in
   crates/yshell-terminal. Themes must sit beside the exe as
@@ -14,45 +14,47 @@
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
-           Name="YShell"
+           Name="gTerm"
            Language="1033"
            Version="@VERSION@"
-           Manufacturer="YShell"
+           Manufacturer="gTerm"
            UpgradeCode="{483C68E0-EEEA-47BE-A2A9-8E99A73012BF}">
     <Package InstallerVersion="500"
              Compressed="yes"
              InstallScope="perMachine"
-             Description="YShell SSH terminal and SFTP client"
+             Description="gTerm multi-protocol terminal and SFTP client"
              Comments="https://github.com/delichik/yshell" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of YShell is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of gTerm is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <UIRef Id="WixUI_Minimal" />
     <WixVariable Id="WixUILicenseRtf" Value="@LICENSE_RTF@" />
+    <Icon Id="GTermIcon.ico" SourceFile="@ICON@" />
+    <Property Id="ARPPRODUCTICON" Value="GTermIcon.ico" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="YShell">
-          <Component Id="YShellExecutable" Guid="{B454BD78-5C13-41FB-A1B4-5ACB11EEC51D}">
-            <File Id="YShellExe" Source="@BINARY@" KeyPath="yes" />
+        <Directory Id="INSTALLFOLDER" Name="gTerm">
+          <Component Id="GTermExecutable" Guid="{B454BD78-5C13-41FB-A1B4-5ACB11EEC51D}">
+            <File Id="GTermExe" Source="@BINARY@" KeyPath="yes" />
           </Component>
-          <!-- Role executables spawned by the Host entry: GUI Shell,
-               SessionWorker and MCP daemon. Installed beside yshell.exe in the
+          <!-- Role executables spawned by the Host entry: GUI UI,
+               SessionWorker and MCP daemon. Installed beside gterm.exe in the
                same directory (sibling lookup); no separate shortcuts. -->
-          <Component Id="YShellShellExecutable" Guid="{6D2A8E41-9F3C-4B62-AD71-5C0E93D27B82}">
-            <File Id="YShellShellExe" Source="@SHELL_BIN@" KeyPath="yes" />
+          <Component Id="GTermUiExecutable" Guid="{6D2A8E41-9F3C-4B62-AD71-5C0E93D27B82}">
+            <File Id="GTermUiExe" Source="@SHELL_BIN@" KeyPath="yes" />
           </Component>
-          <Component Id="YShellSessionWorkerExecutable" Guid="{9E5C7B12-4A6D-4F83-B2E0-71C4D5A69823}">
-            <File Id="YShellSessionWorkerExe" Source="@SESSION_WORKER_BIN@" KeyPath="yes" />
+          <Component Id="GTermSessionWorkerExecutable" Guid="{9E5C7B12-4A6D-4F83-B2E0-71C4D5A69823}">
+            <File Id="GTermSessionWorkerExe" Source="@SESSION_WORKER_BIN@" KeyPath="yes" />
           </Component>
-          <Component Id="YShellMcpDaemonExecutable" Guid="{C1D84F63-2B7A-4E95-8A3F-6E05B29D7C34}">
-            <File Id="YShellMcpDaemonExe" Source="@MCP_DAEMON_BIN@" KeyPath="yes" />
+          <Component Id="GTermMcpDaemonExecutable" Guid="{C1D84F63-2B7A-4E95-8A3F-6E05B29D7C34}">
+            <File Id="GTermMcpDaemonExe" Source="@MCP_DAEMON_BIN@" KeyPath="yes" />
           </Component>
-          <Component Id="YShellDocs" Guid="{81F67662-0FCB-4E83-BBFA-58D5237D52E3}">
-            <File Id="YShellReadme" Source="@README@" />
-            <File Id="YShellLicense" Source="@LICENSE@" />
+          <Component Id="GTermDocs" Guid="{81F67662-0FCB-4E83-BBFA-58D5237D52E3}">
+            <File Id="GTermReadme" Source="@README@" />
+            <File Id="GTermLicense" Source="@LICENSE@" />
           </Component>
           <Directory Id="FontsFolder" Name="fonts">
-            <Component Id="YShellFonts" Guid="{A7E2C91F-4B5D-4E8A-9C1D-6F3A2B8E0D47}">
+            <Component Id="GTermFonts" Guid="{A7E2C91F-4B5D-4E8A-9C1D-6F3A2B8E0D47}">
               <File Id="FontDejaVuRegular" Source="@FONTS_DIR@\DejaVuSansMono.ttf" KeyPath="yes" />
               <File Id="FontDejaVuBold" Source="@FONTS_DIR@\DejaVuSansMono-Bold.ttf" />
               <File Id="FontDejaVuOblique" Source="@FONTS_DIR@\DejaVuSansMono-Oblique.ttf" />
@@ -63,7 +65,7 @@
             </Component>
           </Directory>
           <Directory Id="ThemesFolder" Name="themes">
-            <Component Id="YShellThemes" Guid="{C8F1A4B2-6D7E-4F90-A1B2-3C4D5E6F7081}">
+            <Component Id="GTermThemes" Guid="{C8F1A4B2-6D7E-4F90-A1B2-3C4D5E6F7081}">
               <File Id="Theme_afterglow" Source="@THEMES_DIR@\afterglow.toml" KeyPath="yes" />
               <File Id="Theme_ansi_colors_on_black" Source="@THEMES_DIR@\ansi-colors-on-black.toml" />
               <File Id="Theme_ansi_colors_on_white" Source="@THEMES_DIR@\ansi-colors-on-white.toml" />
@@ -97,20 +99,21 @@
         </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="YShell" />
+        <Directory Id="ApplicationProgramsFolder" Name="gTerm" />
       </Directory>
     </Directory>
 
     <DirectoryRef Id="ApplicationProgramsFolder">
-      <Component Id="YShellShortcut" Guid="{C37B2301-F921-4F1B-9DF1-0D651972933A}">
+      <Component Id="GTermShortcut" Guid="{C37B2301-F921-4F1B-9DF1-0D651972933A}">
         <Shortcut Id="StartMenuShortcut"
-                  Name="YShell"
-                  Description="YShell SSH terminal and SFTP client"
-                  Target="[INSTALLFOLDER]yshell.exe"
-                  WorkingDirectory="INSTALLFOLDER" />
+                  Name="gTerm"
+                  Description="gTerm multi-protocol terminal and SFTP client"
+                  Target="[INSTALLFOLDER]gterm.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="GTermIcon.ico" />
         <RemoveFolder Id="CleanUpShortcut" Directory="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU"
-                       Key="Software\YShell"
+                       Key="Software\gTerm"
                        Name="installed"
                        Type="integer"
                        Value="1"
@@ -118,15 +121,15 @@
       </Component>
     </DirectoryRef>
 
-    <Feature Id="YShellFeature" Title="YShell" Level="1">
-      <ComponentRef Id="YShellExecutable" />
-      <ComponentRef Id="YShellShellExecutable" />
-      <ComponentRef Id="YShellSessionWorkerExecutable" />
-      <ComponentRef Id="YShellMcpDaemonExecutable" />
-      <ComponentRef Id="YShellDocs" />
-      <ComponentRef Id="YShellFonts" />
-      <ComponentRef Id="YShellThemes" />
-      <ComponentRef Id="YShellShortcut" />
+    <Feature Id="GTermFeature" Title="gTerm" Level="1">
+      <ComponentRef Id="GTermExecutable" />
+      <ComponentRef Id="GTermUiExecutable" />
+      <ComponentRef Id="GTermSessionWorkerExecutable" />
+      <ComponentRef Id="GTermMcpDaemonExecutable" />
+      <ComponentRef Id="GTermDocs" />
+      <ComponentRef Id="GTermFonts" />
+      <ComponentRef Id="GTermThemes" />
+      <ComponentRef Id="GTermShortcut" />
     </Feature>
   </Product>
 </Wix>

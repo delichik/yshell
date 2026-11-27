@@ -1,7 +1,7 @@
 [package]
 name = "yshell-app"
 version = "0.1.0"
-description = "Native cross-platform SSH terminal and SFTP client"
+description = "Native cross-platform multi-protocol terminal and SFTP client"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -9,24 +9,24 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
-# `yshell` is the Host entry (headless): it spawns the GUI Shell child.
+# `gterm` is the Host entry (headless): it spawns the GUI Shell child.
 # Role binaries are shipped next to it (same directory: fonts/themes are
 # resolved relative to the executable).
 [[bin]]
-name = "yshell"
+name = "gterm"
 path = "src/main.rs"
 
 [[bin]]
-name = "yshell-shell"
-path = "src/bin/yshell-shell.rs"
+name = "gterm-ui"
+path = "src/bin/gterm-ui.rs"
 
 [[bin]]
-name = "yshell-session-worker"
-path = "src/bin/yshell-session-worker.rs"
+name = "gterm-session-worker"
+path = "src/bin/gterm-session-worker.rs"
 
 [[bin]]
-name = "yshell-mcp-daemon"
-path = "src/bin/yshell-mcp-daemon.rs"
+name = "gterm-mcp-daemon"
+path = "src/bin/gterm-mcp-daemon.rs"
 
 [dependencies]
 copypasta = "0.10.2"
@@ -91,62 +91,69 @@ yshell-test-support = { path = "../yshell-test-support" }
 
 # Metadata for `cargo xtask dist --formats deb` (cargo-deb).
 [package.metadata.deb]
-name = "yshell"
-maintainer = "YShell contributors"
-copyright = "2026, YShell contributors"
+name = "gterm"
+maintainer = "gTerm contributors"
+copyright = "2026, gTerm contributors"
 license-file = ["../../LICENSE", "0"]
 extended-description = """\
-YShell is a native, cross-platform SSH terminal and SFTP client with a session \
-manager, terminal tabs, SFTP browser, tunnels and quick commands."""
+gTerm is a native, cross-platform multi-protocol terminal and SFTP client with \
+a session manager, terminal tabs, SFTP browser, tunnels and quick commands."""
 section = "net"
 priority = "optional"
 # The GUI libraries are loaded with dlopen, so `$auto` cannot see them.
 # N4：rfd 的 GTK3 后端是直接链接（非 dlopen），显式声明运行期依赖。
 depends = "$auto, libx11-6, libx11-xcb1, libxcursor1, libxrandr2, libxi6, libxinerama1, libxrender1, libxfixes3, libxkbcommon0, libxkbcommon-x11-0, libfontconfig1, libgtk-3-0"
 assets = [
-    ["target/release/yshell", "usr/bin/", "755"],
-    # Thin role executables must sit beside `yshell` (the Host spawns them as
+    ["target/release/gterm", "usr/bin/", "755"],
+    # Thin role executables must sit beside `gterm` (the Host spawns them as
     # siblings; fonts/themes resolve relative to the executable directory).
-    ["target/release/yshell-shell", "usr/bin/", "755"],
-    ["target/release/yshell-session-worker", "usr/bin/", "755"],
-    ["target/release/yshell-mcp-daemon", "usr/bin/", "755"],
-    ["../../packaging/linux/yshell.desktop", "usr/share/applications/", "644"],
-    ["../../README.md", "usr/share/doc/yshell/README.md", "644"],
-    # Shipped terminal fonts — `resolve_fonts_dir()` looks under /usr/share/yshell/fonts.
-    ["../yshell-terminal/assets/DejaVuSansMono.ttf", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/DejaVuSansMono-Bold.ttf", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/DejaVuSansMono-Oblique.ttf", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/DejaVuSansMono-BoldOblique.ttf", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/NotoSansMonoCJKsc-GB2312-Subset.otf", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/LICENSE-DejaVu.txt", "usr/share/yshell/fonts/", "644"],
-    ["../yshell-terminal/assets/LICENSE-NotoSansMonoCJK-OFL-1.1.txt", "usr/share/yshell/fonts/", "644"],
-    # Shipped terminal color themes — `resolve_shipped_themes_dir()` looks under /usr/share/yshell/themes.
-    ["../../assets/themes/afterglow.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/ansi-colors-on-black.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/ansi-colors-on-white.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/arthur.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/belafonte-day.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/black-on-white.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/chalk.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/chalkboard.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/codeschool.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/dracula.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/earthsong.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/espresso.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/gruvbox-dark.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/idletoes.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/ir-black.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/new-black.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/new-white.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/nord.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/obsidian.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/one-dark.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/pastel-on-black.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/pastel-on-white.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/solarized-dark.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/solarized-light.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/tokyo-night.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/white-on-black.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/xterm.toml", "usr/share/yshell/themes/", "644"],
-    ["../../assets/themes/yshell-default.toml", "usr/share/yshell/themes/", "644"],
+    ["target/release/gterm-ui", "usr/bin/", "755"],
+    ["target/release/gterm-session-worker", "usr/bin/", "755"],
+    ["target/release/gterm-mcp-daemon", "usr/bin/", "755"],
+    ["../../packaging/linux/gterm.desktop", "usr/share/applications/", "644"],
+    ["../../assets/icons/linux/16x16/gterm.png", "usr/share/icons/hicolor/16x16/apps/", "644"],
+    ["../../assets/icons/linux/32x32/gterm.png", "usr/share/icons/hicolor/32x32/apps/", "644"],
+    ["../../assets/icons/linux/48x48/gterm.png", "usr/share/icons/hicolor/48x48/apps/", "644"],
+    ["../../assets/icons/linux/128x128/gterm.png", "usr/share/icons/hicolor/128x128/apps/", "644"],
+    ["../../assets/icons/linux/256x256/gterm.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
+    ["../../assets/icons/linux/512x512/gterm.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+    ["../../assets/icons/svg/gterm.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../../README.md", "usr/share/doc/gterm/README.md", "644"],
+    # Shipped terminal fonts — `resolve_fonts_dir()` looks under /usr/share/gterm/fonts.
+    ["../yshell-terminal/assets/DejaVuSansMono.ttf", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-Bold.ttf", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-Oblique.ttf", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-BoldOblique.ttf", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/NotoSansMonoCJKsc-GB2312-Subset.otf", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/LICENSE-DejaVu.txt", "usr/share/gterm/fonts/", "644"],
+    ["../yshell-terminal/assets/LICENSE-NotoSansMonoCJK-OFL-1.1.txt", "usr/share/gterm/fonts/", "644"],
+    # Shipped terminal color themes — `resolve_shipped_themes_dir()` looks under /usr/share/gterm/themes.
+    ["../../assets/themes/afterglow.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/ansi-colors-on-black.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/ansi-colors-on-white.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/arthur.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/belafonte-day.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/black-on-white.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/chalk.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/chalkboard.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/codeschool.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/dracula.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/earthsong.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/espresso.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/gruvbox-dark.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/idletoes.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/ir-black.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/new-black.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/new-white.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/nord.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/obsidian.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/one-dark.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/pastel-on-black.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/pastel-on-white.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/solarized-dark.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/solarized-light.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/tokyo-night.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/white-on-black.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/xterm.toml", "usr/share/gterm/themes/", "644"],
+    ["../../assets/themes/yshell-default.toml", "usr/share/gterm/themes/", "644"],
 ]

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=gTerm
+GenericName=Terminal client
+Comment=Native multi-protocol terminal and SFTP client
+Exec=gterm
+Icon=gterm
+Terminal=false
+Categories=Network;Utility;TerminalEmulator;
+Keywords=ssh;sftp;scp;serial;telnet;terminal;
+StartupNotify=true
+StartupWMClass=gterm

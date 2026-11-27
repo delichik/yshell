@@ -36,6 +36,6 @@ pub fn run() -> AppResult<()> {
             host::ensure_host_process(&config_dir)?;
             crate::remote_shell::run_remote_shell(config_dir)
         }
-        other => Err(AppError::new(format!("yshell-shell cannot run: {other:?}"))),
+        other => Err(AppError::new(format!("gterm-ui cannot run: {other:?}"))),
     }
 }

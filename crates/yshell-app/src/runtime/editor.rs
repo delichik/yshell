@@ -1049,7 +1049,7 @@ impl AppRuntime {
             .color_scheme
             .as_deref()
             .map(|id| scheme_display_name(id, &self.theme_catalog))
-            .unwrap_or_else(|| "YShell Default".to_owned());
+            .unwrap_or_else(|| "gTerm Default".to_owned());
         theme_field_rows(
             &draft.theme,
             &draft.sources,

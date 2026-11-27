@@ -31,7 +31,7 @@ pub fn run() -> AppResult<()> {
             })
         }
         other => Err(AppError::new(format!(
-            "yshell-session-worker cannot run: {other:?}"
+            "gterm-session-worker cannot run: {other:?}"
         ))),
     }
 }

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="gt-bg" x1="16" y1="16" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#090E1A"/>
+    </linearGradient>
+    <linearGradient id="gt-rim" x1="16" y1="16" x2="16" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#64748B" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.65"/>
+    </linearGradient>
+    <linearGradient id="gt-chev" x1="60" y1="108" x2="114" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7EDEFF"/>
+      <stop offset="100%" stop-color="#0078D4"/>
+    </linearGradient>
+    <linearGradient id="gt-bar" x1="124" y1="182" x2="174" y2="182" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#BAE6FD"/>
+    </linearGradient>
+    <radialGradient id="gt-glow" cx="50%" cy="50%" r="52%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="46" fill="url(#gt-bg)"/>
+  <rect x="16" y="16" width="224" height="224" rx="46" fill="url(#gt-glow)"/>
+  <line x1="30" y1="66" x2="226" y2="66" stroke="#94A3B8" stroke-opacity="0.22" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="50" cy="45" r="5.5" fill="#F87171" fill-opacity="0.90"/>
+  <circle cx="70" cy="45" r="5.5" fill="#FBBF24" fill-opacity="0.90"/>
+  <circle cx="90" cy="45" r="5.5" fill="#34D399" fill-opacity="0.90"/>
+  <path d="M60 108 L114 150 L60 192" stroke="url(#gt-chev)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="124" y1="182" x2="174" y2="182" stroke="url(#gt-bar)" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="190" cy="182" r="17.5" fill="#38BDF8"/>
+  <circle cx="190" cy="182" r="7" fill="#E0F2FE"/>
+  <rect x="17.6" y="17.6" width="220.8" height="220.8" rx="44.4" stroke="url(#gt-rim)" stroke-width="3.2"/>
+</svg>

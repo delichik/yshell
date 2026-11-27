@@ -18,13 +18,13 @@ pub const METHOD_DISCONNECT_SESSION: &str = "disconnect_session";
 pub const METHOD_DUPLICATE_SESSION: &str = "duplicate_session";
 
 /// Product boundaries shown in Settings and returned by `get_mcp_info`.
-pub const MCP_BOUNDARIES_TEXT: &str = "Can: list saved profiles and open terminal tabs; after you approve control, read/write terminals, run commands and wait for output, send keys (e.g. Ctrl+C), disconnect or duplicate tabs.\nCannot: fill passwords or accept host keys (do that in the YShell GUI); control SFTP or tunnels; run without the GUI; let multiple agents hold control at once.";
+pub const MCP_BOUNDARIES_TEXT: &str = "Can: list saved profiles and open terminal tabs; after you approve control, read/write terminals, run commands and wait for output, send keys (e.g. Ctrl+C), disconnect or duplicate tabs.\nCannot: fill passwords or accept host keys (do that in the gTerm GUI); control SFTP or tunnels; run without the GUI; let multiple agents hold control at once.";
 
 /// Host-facing stdio MCP config snippet (any MCP client).
 pub const MCP_HOST_CONFIG_SNIPPET: &str = r#"{
   "mcpServers": {
-    "yshell": {
-      "command": "yshell",
+    "gterm": {
+      "command": "gterm",
       "args": ["--mcp"]
     }
   }

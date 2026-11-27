@@ -22,6 +22,7 @@ fn run() {
     // not for the .po files it embeds: without this, editing translations would
     // leave a stale translation table in the binary.
     println!("cargo:rerun-if-changed=../../translations");
+    println!("cargo:rerun-if-changed=../../assets/icons");
     println!("cargo:rerun-if-env-changed=YSHELL_RELEASE_VERSION");
     println!("cargo:rerun-if-changed=../../.git/HEAD");
     println!("cargo:rerun-if-changed=../../.git/refs/heads");
@@ -92,38 +93,60 @@ fn git_short_sha() -> Option<String> {
     }
 }
 
-/// Embed PE FileVersion / ProductVersion and a **role-specific FileDescription**
-/// so Windows Task Manager / Explorer can tell the four binaries apart.
+/// Embed PE FileVersion / ProductVersion, a **role-specific FileDescription**,
+/// and a **role-specific icon** so Windows Task Manager / Explorer can tell the
+/// four binaries apart.
 /// Best-effort: skip quietly when the host has no `rc` / `windres`.
 fn embed_windows_version_info(version: &str) {
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
     }
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").map(std::path::PathBuf::from);
     let (major, minor, patch, build) = parse_pe_version_parts(version);
-    // (binary, FileDescription, InternalName/OriginalFilename)
+    // (binary, FileDescription, InternalName/OriginalFilename, icon relative path)
     let roles = [
-        ("yshell", "YShell Host (process supervisor)", "yshell.exe"),
-        ("yshell-shell", "YShell GUI Shell", "yshell-shell.exe"),
         (
-            "yshell-session-worker",
-            "YShell Session Worker (SSH/PTY)",
-            "yshell-session-worker.exe",
+            "gterm",
+            "gTerm Host (process supervisor)",
+            "gterm.exe",
+            "../../assets/icons/gterm.ico",
         ),
         (
-            "yshell-mcp-daemon",
-            "YShell MCP Daemon",
-            "yshell-mcp-daemon.exe",
+            "gterm-ui",
+            "gTerm Desktop UI",
+            "gterm-ui.exe",
+            "../../assets/icons/gterm-ui.ico",
+        ),
+        (
+            "gterm-session-worker",
+            "gTerm Session Worker (SSH/PTY)",
+            "gterm-session-worker.exe",
+            "../../assets/icons/gterm-session-worker.ico",
+        ),
+        (
+            "gterm-mcp-daemon",
+            "gTerm MCP Daemon",
+            "gterm-mcp-daemon.exe",
+            "../../assets/icons/gterm-mcp-daemon.ico",
         ),
     ];
-    for (binary, description, original_name) in roles {
+    for (binary, description, original_name, icon_rel) in roles {
         let mut resource = winresource::WindowsResource::new();
         resource.set("FileVersion", version);
         resource.set("ProductVersion", version);
-        resource.set("ProductName", "YShell");
+        resource.set("ProductName", "gTerm");
         resource.set("FileDescription", description);
         resource.set("InternalName", original_name);
         resource.set("OriginalFilename", original_name);
-        resource.set("LegalCopyright", "YShell contributors");
+        resource.set("LegalCopyright", "gTerm contributors");
+        if let Some(dir) = &manifest_dir {
+            let icon_path = dir.join(icon_rel);
+            if icon_path.is_file() {
+                if let Some(icon_str) = icon_path.to_str() {
+                    resource.set_icon(icon_str);
+                }
+            }
+        }
         resource.set_version_info(
             winresource::VersionInfo::FILEVERSION,
             pe_u64(major, minor, patch, build),
@@ -134,7 +157,7 @@ fn embed_windows_version_info(version: &str) {
         );
         // `compile_for` attaches the resource only to that bin
         // (`cargo:rustc-link-arg-bin=<bin>=<res>`), so each role gets its own
-        // description instead of all four sharing one.
+        // description and icon instead of all four sharing one.
         if let Err(error) = resource.compile_for(binary) {
             println!("cargo:warning=skipping Windows version resource for {binary}: {error}");
         }

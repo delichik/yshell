@@ -28,8 +28,6 @@ msgid "Enter the password for {0} to connect."
 msgstr ""
 
 #. A25：图标条按钮的悬停提示文案（`Tooltip` 走 @markdown 插值）。
-#: ui/main_window.slint:1379 ui/main_window.slint:1876
-#: ui/main_window.slint:1379 ui/main_window.slint:1876 ui/components/session_sidebar.slint:237
 #: ui/main_window.slint:1379 ui/main_window.slint:1876 ui/components/session_sidebar.slint:237 ui/components/tool_dock.slint:435
 msgctxt "MainWindow"
 msgid "New Session"
@@ -86,13 +84,6 @@ msgctxt "MainWindow"
 msgid "Paste"
 msgstr ""
 
-#: ui/main_window.slint:1408 ui/main_window.slint:1417
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458 ui/main_window.slint:1539
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458 ui/main_window.slint:1539 ui/main_window.slint:1565
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458 ui/main_window.slint:1539 ui/main_window.slint:1565 ui/main_window.slint:1584
-#: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458 ui/main_window.slint:1539 ui/main_window.slint:1565 ui/main_window.slint:1584 ui/main_window.slint:1599
 #: ui/main_window.slint:1408 ui/main_window.slint:1417 ui/main_window.slint:1427 ui/main_window.slint:1458 ui/main_window.slint:1539 ui/main_window.slint:1565 ui/main_window.slint:1584 ui/main_window.slint:1599 ui/main_window.slint:1609
 msgctxt "MainWindow"
 msgid "Open a session first."
@@ -143,10 +134,6 @@ msgctxt "MainWindow"
 msgid "Connect"
 msgstr ""
 
-#: ui/main_window.slint:1446 ui/main_window.slint:1469
-#: ui/main_window.slint:1446 ui/main_window.slint:1469 ui/main_window.slint:1803
-#: ui/main_window.slint:1446 ui/main_window.slint:1469 ui/main_window.slint:1803 ui/main_window.slint:1813
-#: ui/main_window.slint:1446 ui/main_window.slint:1469 ui/main_window.slint:1803 ui/main_window.slint:1813 ui/main_window.slint:1824
 #: ui/main_window.slint:1446 ui/main_window.slint:1469 ui/main_window.slint:1803 ui/main_window.slint:1813 ui/main_window.slint:1824
 msgctxt "MainWindow"
 msgid "Select a saved session first."
@@ -193,7 +180,6 @@ msgid "Connect the terminal before switching to SFTP."
 msgstr ""
 
 #: ui/main_window.slint:1480 ui/main_window.slint:1487
-#: ui/main_window.slint:1480 ui/main_window.slint:1487
 msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr ""
@@ -233,12 +219,9 @@ msgctxt "MainWindow"
 msgid "Split Right"
 msgstr ""
 
-#: ui/main_window.slint:1503 ui/main_window.slint:1508
 #: ui/main_window.slint:1503 ui/main_window.slint:1508 ui/main_window.slint:1750
 msgctxt "MainWindow"
-msgid ""
-"Open a terminal session before splitting, or close a pane (at the runtime "
-"limit)."
+msgid "Open a terminal session before splitting, or close a pane (at the runtime limit)."
 msgstr ""
 
 #: ui/main_window.slint:1506 ui/main_window.slint:1748
@@ -268,8 +251,7 @@ msgstr ""
 
 #: ui/main_window.slint:1524
 msgctxt "MainWindow"
-msgid ""
-"Hide left and right tool docks while keeping the workspace and status bar."
+msgid "Hide left and right tool docks while keeping the workspace and status bar."
 msgstr ""
 
 #: ui/main_window.slint:1529
@@ -299,7 +281,7 @@ msgstr ""
 
 #: ui/main_window.slint:1543
 msgctxt "MainWindow"
-msgid "About YShell"
+msgid "About gTerm"
 msgstr ""
 
 #: ui/main_window.slint:1553
@@ -312,7 +294,6 @@ msgctxt "MainWindow"
 msgid "Copy Screen"
 msgstr ""
 
-#: ui/main_window.slint:1560 ui/main_window.slint:1579
 #: ui/main_window.slint:1560 ui/main_window.slint:1579
 msgctxt "MainWindow"
 msgid "Visible screen is empty."
@@ -533,8 +514,6 @@ msgctxt "MainWindow"
 msgid "Favorite"
 msgstr ""
 
-#: ui/main_window.slint:1828 ui/main_window.slint:1853
-#: ui/main_window.slint:1828 ui/main_window.slint:1853 ui/main_window.slint:1861
 #: ui/main_window.slint:1828 ui/main_window.slint:1853 ui/main_window.slint:1861 ui/main_window.slint:1879
 msgctxt "MainWindow"
 msgid "Not available in this version."
@@ -616,7 +595,6 @@ msgid "Refresh"
 msgstr ""
 
 #: ui/main_window.slint:1903 ui/components/session_sidebar.slint:238
-#: ui/main_window.slint:1903 ui/components/session_sidebar.slint:238
 msgctxt "MainWindow"
 msgid "Expand navigation"
 msgstr ""
@@ -648,18 +626,14 @@ msgstr ""
 
 #: ui/components/auth_prompt_dialog.slint:175
 msgctxt "AuthPromptDialog"
-msgid ""
-"Pick a method the server accepts. You can switch and retry without losing "
-"what you typed."
+msgid "Pick a method the server accepts. You can switch and retry without losing what you typed."
 msgstr ""
 
 #: ui/components/auth_prompt_dialog.slint:189
 msgctxt "AuthPromptDialog"
-msgid "The server does not offer any authentication method YShell supports."
+msgid "The server does not offer any authentication method gTerm supports."
 msgstr ""
 
-#: ui/components/auth_prompt_dialog.slint:197
-#: ui/components/auth_prompt_dialog.slint:197
 #: ui/components/auth_prompt_dialog.slint:197
 msgctxt "AuthPromptDialog"
 msgid "Password"
@@ -682,9 +656,7 @@ msgstr ""
 
 #: ui/components/auth_prompt_dialog.slint:298
 msgctxt "AuthPromptDialog"
-msgid ""
-"No managed private key. Import one on the Private Keys page, or browse for a "
-"key file."
+msgid "No managed private key. Import one on the Private Keys page, or browse for a key file."
 msgstr ""
 
 #: ui/components/auth_prompt_dialog.slint:312
@@ -874,17 +846,12 @@ msgstr ""
 
 #: ui/components/host_key_dialog.slint:92
 msgctxt "HostKeyDialog"
-msgid ""
-"Compare the fingerprint with a trusted source, then trust once or save it "
-"for next time."
+msgid "Compare the fingerprint with a trusted source, then trust once or save it for next time."
 msgstr ""
 
 #: ui/components/host_key_dialog.slint:102
 msgctxt "HostKeyDialog"
-msgid ""
-"The presented key does not match the stored key. This may indicate a man-in-"
-"the-middle attack. Replace and Trust will overwrite the stored key; do so "
-"only if you verified the new key elsewhere."
+msgid "The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere."
 msgstr ""
 
 #: ui/components/host_key_dialog.slint:110
@@ -897,7 +864,6 @@ msgctxt "HostKeyDialog"
 msgid "Expected"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:117
 #: ui/components/host_key_dialog.slint:117
 msgctxt "HostKeyDialog"
 msgid "{0} {1}"
@@ -949,12 +915,10 @@ msgid "Recording terminal output to this file:"
 msgstr ""
 
 #: ui/components/logging_dialog.slint:193
-#: ui/components/logging_dialog.slint:193
 msgctxt "LoggingDialog"
 msgid "Open File"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:202
 #: ui/components/logging_dialog.slint:202
 msgctxt "LoggingDialog"
 msgid "Open Folder"
@@ -975,7 +939,6 @@ msgctxt "LoggingDialog"
 msgid "Log folder"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:242
 #: ui/components/logging_dialog.slint:242
 msgctxt "LoggingDialog"
 msgid "Browse"
@@ -998,25 +961,19 @@ msgstr ""
 
 #: ui/components/logging_dialog.slint:273
 msgctxt "LoggingDialog"
-msgid ""
-"This file already exists. Confirm to overwrite it, or choose another name."
+msgid "This file already exists. Confirm to overwrite it, or choose another name."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:279
 #: ui/components/logging_dialog.slint:279
 msgctxt "LoggingDialog"
 msgid "Overwrite the existing file"
 msgstr ""
 
 #: ui/components/logging_dialog.slint:282
-#: ui/components/logging_dialog.slint:282
-#: ui/components/logging_dialog.slint:282
 msgctxt "LoggingDialog"
 msgid "On"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:282
-#: ui/components/logging_dialog.slint:282
 #: ui/components/logging_dialog.slint:282
 msgctxt "LoggingDialog"
 msgid "Off"
@@ -1043,12 +1000,10 @@ msgid "Raw (with ANSI escapes)"
 msgstr ""
 
 #: ui/components/logging_dialog.slint:318
-#: ui/components/logging_dialog.slint:318
 msgctxt "LoggingDialog"
 msgid "Timestamp"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:329
 #: ui/components/logging_dialog.slint:329
 msgctxt "LoggingDialog"
 msgid "Record input"
@@ -1061,36 +1016,29 @@ msgstr ""
 
 #: ui/components/logging_dialog.slint:351
 msgctxt "LoggingDialog"
-msgid ""
-"Local input is written to the log in plain text, including passwords you "
-"type interactively. Confirm before enabling."
+msgid "Local input is written to the log in plain text, including passwords you type interactively. Confirm before enabling."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:354
 #: ui/components/logging_dialog.slint:354
 msgctxt "LoggingDialog"
 msgid "I understand local input will be recorded"
 msgstr ""
 
 #: ui/components/logging_dialog.slint:394
-#: ui/components/logging_dialog.slint:394
 msgctxt "LoggingDialog"
 msgid "Close"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:394
 #: ui/components/logging_dialog.slint:394
 msgctxt "LoggingDialog"
 msgid "Cancel"
 msgstr ""
 
 #: ui/components/logging_dialog.slint:400
-#: ui/components/logging_dialog.slint:400
 msgctxt "LoggingDialog"
 msgid "Stop Logging"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:407
 #: ui/components/logging_dialog.slint:407
 msgctxt "LoggingDialog"
 msgid "Start Logging"
@@ -1188,16 +1136,13 @@ msgid "This panel cannot be hidden."
 msgstr ""
 
 #: ui/components/password_prompt_dialog.slint:49
-#: ui/components/password_prompt_dialog.slint:49
 msgctxt "PasswordPromptDialog"
 msgid "Password"
 msgstr ""
 
 #: ui/components/password_prompt_dialog.slint:62
 msgctxt "PasswordPromptDialog"
-msgid ""
-"Used for this connection only. It is not saved unless you choose to remember "
-"it elsewhere."
+msgid "Used for this connection only. It is not saved unless you choose to remember it elsewhere."
 msgstr ""
 
 #: ui/components/password_prompt_dialog.slint:88
@@ -1343,7 +1288,6 @@ msgid "Download To..."
 msgstr ""
 
 #: ui/components/sftp_panel.slint:900 ui/components/sftp_panel.slint:916
-#: ui/components/sftp_panel.slint:900 ui/components/sftp_panel.slint:916
 msgctxt "SftpContextMenu"
 msgid "Copy To..."
 msgstr ""
@@ -1363,7 +1307,6 @@ msgctxt "SftpContextMenu"
 msgid "Change Permissions"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:906 ui/components/sftp_panel.slint:924
 #: ui/components/sftp_panel.slint:906 ui/components/sftp_panel.slint:924 ui/components/sftp_panel.slint:960
 msgctxt "SftpContextMenu"
 msgid "Copy"
@@ -1376,10 +1319,6 @@ msgstr ""
 
 #. 行为是 `open_sftp_path("/")`（远端根），不是登录用户家目录，
 #. 文案如实描述（B12）。
-#: ui/components/sftp_panel.slint:907 ui/components/sftp_panel.slint:909
-#: ui/components/sftp_panel.slint:907 ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:927
-#: ui/components/sftp_panel.slint:907 ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:927 ui/components/sftp_panel.slint:944
-#: ui/components/sftp_panel.slint:907 ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:927 ui/components/sftp_panel.slint:944 ui/components/sftp_panel.slint:967
 #: ui/components/sftp_panel.slint:907 ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:927 ui/components/sftp_panel.slint:944 ui/components/sftp_panel.slint:967
 msgctxt "SftpContextMenu"
 msgid "Connect to the remote host first."
@@ -1406,12 +1345,10 @@ msgid "Upload Files..."
 msgstr ""
 
 #: ui/components/sftp_panel.slint:934 ui/components/sftp_panel.slint:964
-#: ui/components/sftp_panel.slint:934 ui/components/sftp_panel.slint:964
 msgctxt "SftpContextMenu"
 msgid "Refresh"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:935 ui/components/sftp_panel.slint:965
 #: ui/components/sftp_panel.slint:935 ui/components/sftp_panel.slint:965
 msgctxt "SftpContextMenu"
 msgid "Show Hidden Files"
@@ -1439,7 +1376,6 @@ msgctxt "SftpContextMenu"
 msgid "Root directory (/)"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:944 ui/components/sftp_panel.slint:967
 #: ui/components/sftp_panel.slint:944 ui/components/sftp_panel.slint:967
 msgctxt "SftpContextMenu"
 msgid "Switch to Terminal"
@@ -1542,9 +1478,7 @@ msgstr ""
 
 #: ui/components/sftp_panel.slint:1151
 msgctxt "SftpEntryDialog"
-msgid ""
-"This permanently removes the {0} selected remote entries, directories "
-"recursively."
+msgid "This permanently removes the {0} selected remote entries, directories recursively."
 msgstr ""
 
 #: ui/components/sftp_panel.slint:1152
@@ -1554,9 +1488,7 @@ msgstr ""
 
 #: ui/components/sftp_panel.slint:1154
 msgctxt "SftpEntryDialog"
-msgid ""
-"Uploads the local file or directory into the current remote directory using "
-"its name."
+msgid "Uploads the local file or directory into the current remote directory using its name."
 msgstr ""
 
 #: ui/components/sftp_panel.slint:1155
@@ -1651,9 +1583,7 @@ msgstr ""
 
 #: ui/components/sftp_panel.slint:1416
 msgctxt "SftpConflictDialog"
-msgid ""
-"Overwrite replaces them, Rename keeps both by adding a number, Skip leaves "
-"them untouched."
+msgid "Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched."
 msgstr ""
 
 #: ui/components/sftp_panel.slint:1435 ui/components/sftp_panel.slint:1436
@@ -1792,7 +1722,6 @@ msgid "Logging — open logging menu"
 msgstr ""
 
 #: ui/components/sync_input_banner.slint:52
-#: ui/components/sync_input_banner.slint:52
 msgctxt "MainWindow"
 msgid "Input Sync"
 msgstr ""
@@ -1802,7 +1731,6 @@ msgctxt "MainWindow"
 msgid "On"
 msgstr ""
 
-#: ui/components/sync_input_banner.slint:111 ui/text_formats.slint:1923
 #: ui/components/sync_input_banner.slint:111 ui/text_formats.slint:1923
 msgctxt "MainWindow"
 msgid "Off"
@@ -2074,8 +2002,7 @@ msgstr ""
 
 #: ui/components/tunnel_panel.slint:43
 msgctxt "TunnelPanel"
-msgid ""
-"No active session. Open a session with tunnel forwards to manage them here."
+msgid "No active session. Open a session with tunnel forwards to manage them here."
 msgstr ""
 
 #: ui/components/window_caption.slint:119
@@ -2109,7 +2036,6 @@ msgid "Local"
 msgstr ""
 
 #: ui/components/workspace_tab_bar.slint:120
-#: ui/components/workspace_tab_bar.slint:120
 msgctxt "MainWindow"
 msgid "New session"
 msgstr ""
@@ -2137,7 +2063,7 @@ msgstr ""
 
 #: ui/pages/about.slint:70
 msgctxt "AboutDialog"
-msgid "About YShell"
+msgid "About gTerm"
 msgstr ""
 
 #: ui/pages/about.slint:80 ui/pages/about.slint:161
@@ -2147,12 +2073,12 @@ msgstr ""
 
 #: ui/pages/about.slint:91
 msgctxt "AboutDialog"
-msgid "YShell {0}"
+msgid "gTerm {0}"
 msgstr ""
 
 #: ui/pages/about.slint:97
 msgctxt "AboutDialog"
-msgid "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
+msgid "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
 msgstr ""
 
 #: ui/pages/about.slint:111
@@ -2181,7 +2107,6 @@ msgid "Reset"
 msgstr ""
 
 #: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:249
-#: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:249
 msgctxt "FieldRow"
 msgid "(not set)"
 msgstr ""
@@ -2203,8 +2128,7 @@ msgstr ""
 
 #: ui/pages/folder_editor.slint:427
 msgctxt "FolderEditor"
-msgid ""
-"Colors and font for new terminals opened in this folder and its subfolders."
+msgid "Colors and font for new terminals opened in this folder and its subfolders."
 msgstr ""
 
 #: ui/pages/folder_editor.slint:438
@@ -2244,8 +2168,7 @@ msgstr ""
 
 #: ui/pages/host_keys.slint:187
 msgctxt "HostKeysPage"
-msgid ""
-"No host keys have been saved yet. They are recorded when you trust a host."
+msgid "No host keys have been saved yet. They are recorded when you trust a host."
 msgstr ""
 
 #: ui/pages/host_keys.slint:234
@@ -2330,8 +2253,7 @@ msgstr ""
 
 #: ui/pages/private_keys.slint:96
 msgctxt "PrivateKeysPage"
-msgid ""
-"No managed private keys yet. Generate a key or import an OpenSSH private key."
+msgid "No managed private keys yet. Generate a key or import an OpenSSH private key."
 msgstr ""
 
 #: ui/pages/private_keys.slint:174
@@ -2911,8 +2833,7 @@ msgstr ""
 
 #: ui/pages/session_editor.slint:917
 msgctxt "SessionEditor"
-msgid ""
-"Import an OpenSSH private key in the Private Keys manager, then pick it here."
+msgid "Import an OpenSSH private key in the Private Keys manager, then pick it here."
 msgstr ""
 
 #: ui/pages/session_editor.slint:918
@@ -2942,9 +2863,7 @@ msgstr ""
 
 #: ui/pages/session_editor.slint:956
 msgctxt "SessionEditor"
-msgid ""
-"Legacy key path with a saved passphrase. Select a managed key to migrate "
-"this session."
+msgid "Legacy key path with a saved passphrase. Select a managed key to migrate this session."
 msgstr ""
 
 #: ui/pages/session_editor.slint:957
@@ -2974,9 +2893,7 @@ msgstr ""
 
 #: ui/pages/session_editor.slint:1132
 msgctxt "SessionEditor"
-msgid ""
-"Inherited from the parent. Turn off Inherit to edit the steps for this "
-"session."
+msgid "Inherited from the parent. Turn off Inherit to edit the steps for this session."
 msgstr ""
 
 #: ui/pages/session_editor.slint:1166
@@ -2996,9 +2913,7 @@ msgstr ""
 
 #: ui/pages/session_editor.slint:1208
 msgctxt "SessionEditor"
-msgid ""
-"The selected managed proxy is no longer available. Choose another proxy or "
-"No Proxy."
+msgid "The selected managed proxy is no longer available. Choose another proxy or No Proxy."
 msgstr ""
 
 #: ui/pages/session_editor.slint:1215
@@ -3023,9 +2938,7 @@ msgstr ""
 
 #: ui/pages/session_editor.slint:1349
 msgctxt "SessionEditor"
-msgid ""
-"Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this "
-"session."
+msgid "Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this session."
 msgstr ""
 
 #: ui/pages/session_editor.slint:1370
@@ -3143,19 +3056,11 @@ msgctxt "SettingsDialog"
 msgid "Confirm close"
 msgstr ""
 
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110
 #: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110 ui/pages/settings.slint:1182
 msgctxt "SettingsDialog"
 msgid "On"
 msgstr ""
 
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008
-#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110
 #: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110 ui/pages/settings.slint:1182
 msgctxt "SettingsDialog"
 msgid "Off"
@@ -3173,7 +3078,7 @@ msgstr ""
 
 #: ui/pages/settings.slint:508
 msgctxt "SettingsDialog"
-msgid "Ask before quitting YShell."
+msgid "Ask before quitting gTerm."
 msgstr ""
 
 #: ui/pages/settings.slint:512 ui/pages/settings.slint:515
@@ -3248,8 +3153,7 @@ msgstr ""
 
 #: ui/pages/settings.slint:616
 msgctxt "SettingsDialog"
-msgid ""
-"Default for new terminals; fonts and colors are edited in Terminal Styles."
+msgid "Default for new terminals; fonts and colors are edited in Terminal Styles."
 msgstr ""
 
 #: ui/pages/settings.slint:634
@@ -3282,7 +3186,6 @@ msgctxt "SettingsDialog"
 msgid "Middle click"
 msgstr ""
 
-#: ui/pages/settings.slint:688 ui/pages/settings.slint:704
 #: ui/pages/settings.slint:688 ui/pages/settings.slint:704
 msgctxt "SettingsDialog"
 msgid "Paste"
@@ -3708,7 +3611,6 @@ msgctxt "ThemeManagerPage"
 msgid "Font family"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:406 ui/pages/theme_manager.slint:407
 #: ui/pages/theme_manager.slint:406 ui/pages/theme_manager.slint:407 ui/pages/theme_manager.slint:450
 msgctxt "ThemeManagerPage"
 msgid "Add Font File"
@@ -3741,9 +3643,7 @@ msgstr ""
 
 #: ui/pages/theme_manager.slint:483
 msgctxt "ThemeManagerPage"
-msgid ""
-"Select a custom style to edit its colors, or right-click a built-in style to "
-"clone it."
+msgid "Select a custom style to edit its colors, or right-click a built-in style to clone it."
 msgstr ""
 
 #: ui/pages/theme_manager.slint:517
@@ -3833,14 +3733,12 @@ msgstr ""
 
 #: ui/text_formats.slint:75
 msgctxt "MainWindow"
-msgid "YShell terminal"
+msgid "gTerm terminal"
 msgstr ""
 
 #: ui/text_formats.slint:80
 msgctxt "MainWindow"
-msgid ""
-"Runtime is ready. Open a Quick Connect target or create a local terminal tab "
-"with +."
+msgid "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +."
 msgstr ""
 
 #: ui/text_formats.slint:82
@@ -3905,9 +3803,7 @@ msgstr ""
 
 #: ui/text_formats.slint:133 ui/text_formats.slint:1178
 msgctxt "MainWindow"
-msgid ""
-"Loaded saved session into the editor. Run Auth Test before saving if you "
-"want to validate the current form."
+msgid "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form."
 msgstr ""
 
 #: ui/text_formats.slint:136 ui/text_formats.slint:1187
@@ -3937,8 +3833,7 @@ msgstr ""
 
 #: ui/text_formats.slint:153
 msgctxt "MainWindow"
-msgid ""
-"Save terminal settings to apply the scrollback limits to existing sessions."
+msgid "Save terminal settings to apply the scrollback limits to existing sessions."
 msgstr ""
 
 #: ui/text_formats.slint:156
@@ -4005,8 +3900,7 @@ msgstr ""
 
 #: ui/text_formats.slint:196
 msgctxt "MainWindow"
-msgid ""
-"SFTP session is disconnected. Connect the draft before browsing remote files."
+msgid "SFTP session is disconnected. Connect the draft before browsing remote files."
 msgstr ""
 
 #: ui/text_formats.slint:199
@@ -4031,15 +3925,12 @@ msgstr ""
 
 #: ui/text_formats.slint:211
 msgctxt "MainWindow"
-msgid ""
-"SFTP session is disconnected. Connect or reconnect the runtime session first."
+msgid "SFTP session is disconnected. Connect or reconnect the runtime session first."
 msgstr ""
 
 #: ui/text_formats.slint:214
 msgctxt "MainWindow"
-msgid ""
-"SFTP session is disconnected. Reconnect this runtime session before using "
-"SFTP."
+msgid "SFTP session is disconnected. Reconnect this runtime session before using SFTP."
 msgstr ""
 
 #: ui/text_formats.slint:217
@@ -4392,9 +4283,7 @@ msgstr ""
 
 #: ui/text_formats.slint:451
 msgctxt "MainWindow"
-msgid ""
-"Saved active runtime session as profile `{0}`. Config now contains {1} saved "
-"session(s)."
+msgid "Saved active runtime session as profile `{0}`. Config now contains {1} saved session(s)."
 msgstr ""
 
 #: ui/text_formats.slint:454
@@ -4583,7 +4472,6 @@ msgid_plural "{n} still active connections"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/text_formats.slint:577 ui/text_formats.slint:580
 #: ui/text_formats.slint:577 ui/text_formats.slint:580
 msgctxt "MainWindow"
 msgid "Closed {n} tab."
@@ -4867,9 +4755,7 @@ msgstr ""
 
 #: ui/text_formats.slint:757
 msgctxt "MainWindow"
-msgid ""
-"Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote "
-"edit."
+msgid "Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote edit."
 msgstr ""
 
 #: ui/text_formats.slint:760
@@ -4904,8 +4790,7 @@ msgstr ""
 
 #: ui/text_formats.slint:778
 msgctxt "MainWindow"
-msgid ""
-"Canceled remote edit for `{0}`, but the temp file could not be removed: {1}"
+msgid "Canceled remote edit for `{0}`, but the temp file could not be removed: {1}"
 msgstr ""
 
 #: ui/text_formats.slint:781
@@ -5037,14 +4922,12 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: ui/text_formats.slint:846 ui/text_formats.slint:853
-#: ui/text_formats.slint:846 ui/text_formats.slint:853
 msgctxt "MainWindow"
 msgid "{n} failed."
 msgid_plural "{n} failed."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/text_formats.slint:852 ui/text_formats.slint:855
 #: ui/text_formats.slint:852 ui/text_formats.slint:855
 msgctxt "MainWindow"
 msgid "Copied {n} local entry."
@@ -5225,10 +5108,8 @@ msgstr[1] ""
 
 #: ui/text_formats.slint:966
 msgctxt "MainWindow"
-msgid ""
-"Copied {n} character from the visible terminal view into the app clipboard."
-msgid_plural ""
-"Copied {n} characters from the visible terminal view into the app clipboard."
+msgid "Copied {n} character from the visible terminal view into the app clipboard."
+msgid_plural "Copied {n} characters from the visible terminal view into the app clipboard."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -5379,16 +5260,12 @@ msgstr ""
 
 #: ui/text_formats.slint:1069
 msgctxt "MainWindow"
-msgid ""
-"Global logging format set to raw transcript. Save logging settings to "
-"persist."
+msgid "Global logging format set to raw transcript. Save logging settings to persist."
 msgstr ""
 
 #: ui/text_formats.slint:1072
 msgctxt "MainWindow"
-msgid ""
-"Global logging format set to sanitized text. Save logging settings to "
-"persist."
+msgid "Global logging format set to sanitized text. Save logging settings to persist."
 msgstr ""
 
 #: ui/text_formats.slint:1075
@@ -5403,9 +5280,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1082
 msgctxt "MainWindow"
-msgid ""
-"Canceled host key confirmation. No changes were written and the connection "
-"was not started."
+msgid "Canceled host key confirmation. No changes were written and the connection was not started."
 msgstr ""
 
 #: ui/text_formats.slint:1085
@@ -5415,8 +5290,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1088
 msgctxt "MainWindow"
-msgid ""
-"Trusted the presented host key for {0} for this session only. Reconnecting."
+msgid "Trusted the presented host key for {0} for this session only. Reconnecting."
 msgstr ""
 
 #: ui/text_formats.slint:1091
@@ -5436,8 +5310,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1100
 msgctxt "MainWindow"
-msgid ""
-"Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
+msgid "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
 msgstr ""
 
 #: ui/text_formats.slint:1103
@@ -5622,9 +5495,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1234
 msgctxt "MainWindow"
-msgid ""
-"Created folder `{0}` in the session tree root and persisted the updated "
-"config."
+msgid "Created folder `{0}` in the session tree root and persisted the updated config."
 msgstr ""
 
 #: ui/text_formats.slint:1237
@@ -5634,8 +5505,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1240
 msgctxt "MainWindow"
-msgid ""
-"Reloaded saved sessions from config.toml. Saved sessions discovered: {0}."
+msgid "Reloaded saved sessions from config.toml. Saved sessions discovered: {0}."
 msgstr ""
 
 #: ui/text_formats.slint:1243
@@ -5750,9 +5620,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1313
 msgctxt "MainWindow"
-msgid ""
-"Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by "
-"the runtime yet."
+msgid "Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
 msgstr ""
 
 #: ui/text_formats.slint:1316
@@ -5902,9 +5770,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1404
 msgctxt "MainWindow"
-msgid ""
-"Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions "
-"to No Proxy first."
+msgid "Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions to No Proxy first."
 msgstr ""
 
 #: ui/text_formats.slint:1407
@@ -5920,8 +5786,7 @@ msgstr ""
 #: ui/text_formats.slint:1413
 msgctxt "MainWindow"
 msgid "Cleared proxy `{0}` from {n} saved session; they now use No Proxy."
-msgid_plural ""
-"Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy."
+msgid_plural "Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -6209,8 +6074,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1591
 msgctxt "MainWindow"
-msgid ""
-"Editing defaults for `{0}`. Changes apply to terminals opened afterwards."
+msgid "Editing defaults for `{0}`. Changes apply to terminals opened afterwards."
 msgstr ""
 
 #: ui/text_formats.slint:1594
@@ -6245,9 +6109,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1615
 msgctxt "MainWindow"
-msgid ""
-"Saved folder defaults for `{0}`. New terminals use them; open terminals keep "
-"their theme."
+msgid "Saved folder defaults for `{0}`. New terminals use them; open terminals keep their theme."
 msgstr ""
 
 #: ui/text_formats.slint:1619
@@ -6279,8 +6141,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1638
 msgctxt "MainWindow"
-msgid ""
-"Paste a `host:port` entry with an OpenSSH public key or a SHA256 fingerprint."
+msgid "Paste a `host:port` entry with an OpenSSH public key or a SHA256 fingerprint."
 msgstr ""
 
 #: ui/text_formats.slint:1641
@@ -6325,9 +6186,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1671
 msgctxt "MainWindow"
-msgid ""
-"Generate a new managed key: choose the algorithm, then confirm the "
-"passphrase."
+msgid "Generate a new managed key: choose the algorithm, then confirm the passphrase."
 msgstr ""
 
 #: ui/text_formats.slint:1674
@@ -6367,8 +6226,7 @@ msgstr ""
 
 #: ui/text_formats.slint:1698
 msgctxt "MainWindow"
-msgid ""
-"No live SSH session is available to deploy to. Open an SSH session first."
+msgid "No live SSH session is available to deploy to. Open an SSH session first."
 msgstr ""
 
 #: ui/text_formats.slint:1701
@@ -6752,17 +6610,17 @@ msgstr ""
 
 #: ui/windows/about_window.slint:14 ui/windows/about_window.slint:54
 msgctxt "AboutWindow"
-msgid "About YShell"
+msgid "About gTerm"
 msgstr ""
 
 #: ui/windows/about_window.slint:68
 msgctxt "AboutWindow"
-msgid "YShell {0}"
+msgid "gTerm {0}"
 msgstr ""
 
 #: ui/windows/about_window.slint:77
 msgctxt "AboutWindow"
-msgid "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
+msgid "A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows."
 msgstr ""
 
 #: ui/windows/about_window.slint:89
@@ -6801,7 +6659,6 @@ msgid "Authentication required"
 msgstr ""
 
 #: ui/windows/compact_confirm_window.slint:27
-#: ui/windows/compact_confirm_window.slint:27
 msgctxt "CompactConfirmWindow"
 msgid "Confirm"
 msgstr ""
@@ -6812,12 +6669,10 @@ msgid "Cancel"
 msgstr ""
 
 #: ui/windows/compact_confirm_window.slint:195
-#: ui/windows/compact_confirm_window.slint:195
 msgctxt "CompactConfirmWindow"
 msgid "Don't ask again"
 msgstr ""
 
-#: ui/windows/folder_editor_window.slint:8
 #: ui/windows/folder_editor_window.slint:8
 msgctxt "FolderEditorWindow"
 msgid "Folder Defaults"
@@ -6835,8 +6690,7 @@ msgstr ""
 
 #: ui/windows/host_keys_window.slint:42
 msgctxt "HostKeysWindow"
-msgid ""
-"No host keys have been saved yet. They are recorded when you trust a host."
+msgid "No host keys have been saved yet. They are recorded when you trust a host."
 msgstr ""
 
 #: ui/windows/host_keys_window.slint:71
@@ -6854,7 +6708,6 @@ msgctxt "HostKeyWindow"
 msgid "Host Key Confirmation"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:15
 #: ui/windows/known_host_add_window.slint:15
 msgctxt "KnownHostAddWindow"
 msgid "Add Known Host"
@@ -6881,7 +6734,6 @@ msgid "Add"
 msgstr ""
 
 #: ui/windows/known_host_export_window.slint:15
-#: ui/windows/known_host_export_window.slint:15
 msgctxt "KnownHostExportWindow"
 msgid "Export Known Hosts"
 msgstr ""
@@ -6891,7 +6743,6 @@ msgctxt "KnownHostExportWindow"
 msgid "Destination file"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:73
 #: ui/windows/known_host_export_window.slint:73
 msgctxt "KnownHostExportWindow"
 msgid "Browse"
@@ -6913,7 +6764,6 @@ msgid "Export"
 msgstr ""
 
 #: ui/windows/known_host_import_window.slint:15
-#: ui/windows/known_host_import_window.slint:15
 msgctxt "KnownHostImportWindow"
 msgid "Import Known Hosts"
 msgstr ""
@@ -6923,7 +6773,6 @@ msgctxt "KnownHostImportWindow"
 msgid "Path to known_hosts file"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:73
 #: ui/windows/known_host_import_window.slint:73
 msgctxt "KnownHostImportWindow"
 msgid "Browse"
@@ -6976,17 +6825,12 @@ msgstr ""
 
 #: ui/windows/login_step_keys.slint:107
 msgctxt "LoginStepKeysWindow"
-msgid ""
-"Type special keys as {{…}} (case-insensitive); double the braces for a "
-"literal brace."
+msgid "Type special keys as {{…}} (case-insensitive); double the braces for a literal brace."
 msgstr ""
 
 #: ui/windows/login_step_keys.slint:114
 msgctxt "LoginStepKeysWindow"
-msgid ""
-"{{Enter}} / {{Return}} · {{Tab}} · {{Esc}} · {{Space}} · {{Backspace}} · "
-"{{Delete}} · {{Up}} {{Down}} {{Left}} {{Right}} · {{Home}} {{End}} · "
-"{{Ctrl+C}} {{Ctrl+D}} {{Ctrl+Z}} · {{Alt+…}} {{Shift+…}} · {{ {{ }} }}"
+msgid "{{Enter}} / {{Return}} · {{Tab}} · {{Esc}} · {{Space}} · {{Backspace}} · {{Delete}} · {{Up}} {{Down}} {{Left}} {{Right}} · {{Home}} {{End}} · {{Ctrl+C}} {{Ctrl+D}} {{Ctrl+Z}} · {{Alt+…}} {{Shift+…}} · {{ {{ }} }}"
 msgstr ""
 
 #: ui/windows/login_step_keys.slint:122
@@ -7045,7 +6889,6 @@ msgid "Save"
 msgstr ""
 
 #: ui/windows/master_password_unlock_window.slint:41
-#: ui/windows/master_password_unlock_window.slint:41
 msgctxt "MasterPasswordUnlockWindow"
 msgid "Master Password Required"
 msgstr ""
@@ -7077,10 +6920,9 @@ msgstr ""
 
 #: ui/windows/master_password_unlock_window.slint:151
 msgctxt "MasterPasswordUnlockWindow"
-msgid "Quit YShell without unlocking"
+msgid "Quit gTerm without unlocking"
 msgstr ""
 
-#: ui/windows/master_password_unlock_window.slint:155
 #: ui/windows/master_password_unlock_window.slint:155
 msgctxt "MasterPasswordUnlockWindow"
 msgid "Unlock"
@@ -7147,7 +6989,6 @@ msgid "New Folder"
 msgstr ""
 
 #: ui/windows/password_prompt_window.slint:8
-#: ui/windows/password_prompt_window.slint:8
 msgctxt "PasswordPromptWindow"
 msgid "Password required"
 msgstr ""
@@ -7169,8 +7010,7 @@ msgstr ""
 
 #: ui/windows/private_key_deploy_window.slint:76
 msgctxt "PrivateKeyDeployWindow"
-msgid ""
-"No live SSH session is available. Open an SSH session, then deploy again."
+msgid "No live SSH session is available. Open an SSH session, then deploy again."
 msgstr ""
 
 #: ui/windows/private_key_deploy_window.slint:139
@@ -7183,7 +7023,6 @@ msgctxt "PrivateKeyDeployWindow"
 msgid "Deploy"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:13
 #: ui/windows/private_key_export_window.slint:13
 msgctxt "PrivateKeyExportWindow"
 msgid "Export Public Key"
@@ -7205,7 +7044,6 @@ msgid "Destination file"
 msgstr ""
 
 #: ui/windows/private_key_export_window.slint:117
-#: ui/windows/private_key_export_window.slint:117
 msgctxt "PrivateKeyExportWindow"
 msgid "Browse"
 msgstr ""
@@ -7220,7 +7058,6 @@ msgctxt "PrivateKeyExportWindow"
 msgid "Export"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:15
 #: ui/windows/private_key_generate_window.slint:15
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Generate Private Key"
@@ -7297,7 +7134,6 @@ msgid "Public key"
 msgstr ""
 
 #: ui/windows/private_key_generate_window.slint:247
-#: ui/windows/private_key_generate_window.slint:247
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Copy public key"
 msgstr ""
@@ -7317,7 +7153,6 @@ msgctxt "PrivateKeyGenerateWindow"
 msgid "Done"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:14
 #: ui/windows/private_key_import_window.slint:14
 msgctxt "PrivateKeyImportWindow"
 msgid "Import Private Key"
@@ -7359,7 +7194,6 @@ msgid "Path to private key"
 msgstr ""
 
 #: ui/windows/private_key_import_window.slint:127
-#: ui/windows/private_key_import_window.slint:127
 msgctxt "PrivateKeyImportWindow"
 msgid "Browse"
 msgstr ""
@@ -7390,15 +7224,13 @@ msgid "Import"
 msgstr ""
 
 #: ui/windows/private_keys_window.slint:8
-#: ui/windows/private_keys_window.slint:8
 msgctxt "PrivateKeysWindow"
 msgid "Private Keys"
 msgstr ""
 
 #: ui/windows/private_keys_window.slint:28
 msgctxt "PrivateKeysWindow"
-msgid ""
-"No managed private keys yet. Generate a key or import an OpenSSH private key."
+msgid "No managed private keys yet. Generate a key or import an OpenSSH private key."
 msgstr ""
 
 #: ui/windows/proxies_window.slint:8 ui/windows/proxies_window.slint:79
@@ -7412,7 +7244,6 @@ msgid "No managed proxies yet. Create one to use it in a session."
 msgstr ""
 
 #: ui/windows/session_editor_window.slint:13
-#: ui/windows/session_editor_window.slint:13
 msgctxt "SessionEditorWindow"
 msgid "Session Editor"
 msgstr ""
@@ -7422,7 +7253,6 @@ msgctxt "SettingsWindow"
 msgid "Settings"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:26
 #: ui/windows/sftp_chmod_window.slint:26
 msgctxt "SftpChmodWindow"
 msgid "Change permissions"
@@ -7539,7 +7369,6 @@ msgid "Apply"
 msgstr ""
 
 #: ui/windows/sftp_conflict_window.slint:8
-#: ui/windows/sftp_conflict_window.slint:8
 msgctxt "SftpConflictWindow"
 msgid "Resolve conflicts"
 msgstr ""
@@ -7585,12 +7414,10 @@ msgid "Copy To..."
 msgstr ""
 
 #: ui/windows/sftp_properties_window.slint:8
-#: ui/windows/sftp_properties_window.slint:8
 msgctxt "SftpPropertiesWindow"
 msgid "Properties"
 msgstr ""
 
-#: ui/windows/theme_manager_window.slint:8
 #: ui/windows/theme_manager_window.slint:8
 msgctxt "ThemeManagerWindow"
 msgid "Terminal Styles"
@@ -7602,12 +7429,10 @@ msgid "Built-in {0} · Custom {1}"
 msgstr ""
 
 #: ui/windows/tunnel_editor_window.slint:28
-#: ui/windows/tunnel_editor_window.slint:28
 msgctxt "TunnelEditorWindow"
 msgid "Edit Tunnel"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:28
 #: ui/windows/tunnel_editor_window.slint:28
 msgctxt "TunnelEditorWindow"
 msgid "Add Tunnel"
@@ -7654,7 +7479,6 @@ msgid "Bind port"
 msgstr ""
 
 #: ui/windows/tunnel_editor_window.slint:115
-#: ui/windows/tunnel_editor_window.slint:115
 msgctxt "TunnelEditorWindow"
 msgid "Port"
 msgstr ""
@@ -7669,7 +7493,6 @@ msgctxt "TunnelEditorWindow"
 msgid "Host"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:140
 #: ui/windows/tunnel_editor_window.slint:140
 msgctxt "TunnelEditorWindow"
 msgid "On connect"
@@ -7687,9 +7510,7 @@ msgstr ""
 
 #: ui/windows/tunnel_editor_window.slint:150
 msgctxt "TunnelEditorWindow"
-msgid ""
-"Tunnels are saved with the session; forwarding starts when the tunnel engine "
-"is available."
+msgid "Tunnels are saved with the session; forwarding starts when the tunnel engine is available."
 msgstr ""
 
 #: ui/windows/tunnel_editor_window.slint:162

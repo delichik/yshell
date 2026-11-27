@@ -147,7 +147,7 @@ fn settings_appearance_form_validates_and_persists() {
     assert!(opened.settings_appearance_visible);
     assert_eq!(
         opened.settings_appearance_color_scheme_name_text,
-        "YShell Default"
+        "gTerm Default"
     );
     assert!(opened.settings_appearance_color_scheme_builtin);
     assert!(opened.settings_appearance_preview.is_some());
@@ -170,7 +170,7 @@ fn settings_appearance_form_validates_and_persists() {
     // The summary always reflects the *global default*, not the unsaved draft.
     assert_eq!(
         selected.settings_appearance_color_scheme_name_text,
-        "YShell Default"
+        "gTerm Default"
     );
 
     runtime.update_settings_appearance_font_size("18");
@@ -212,7 +212,7 @@ fn settings_appearance_form_validates_and_persists() {
     assert!(!reset.settings_appearance_visible);
     assert_eq!(
         reset.settings_appearance_color_scheme_name_text,
-        "YShell Default"
+        "gTerm Default"
     );
 }
 
@@ -373,7 +373,7 @@ fn theme_manager_lists_builtin_and_user_themes_with_the_default_flagged() {
         )
         .expect("index")
     );
-    assert_eq!(opened.theme_manager_default_name_text, "YShell Default");
+    assert_eq!(opened.theme_manager_default_name_text, "gTerm Default");
     assert!(opened.theme_manager_preview.is_some());
 
     let cloned = runtime.clone_color_theme("nord").expect("clone built-in");
@@ -599,7 +599,7 @@ fn theme_manager_delete_retargets_references_to_the_default() {
         Some("yshell-default")
     );
     assert_eq!(
-        deleted.theme_manager_default_name_text, "YShell Default",
+        deleted.theme_manager_default_name_text, "gTerm Default",
         "the manager falls back to the built-in default after deletion"
     );
     let persisted = ConfigStore::new(temp.path())
@@ -627,7 +627,7 @@ fn theme_manager_opens_from_settings_and_closes_back_to_it() {
     let manager = runtime.open_theme_manager();
     assert!(manager.theme_manager_visible);
     assert!(manager.settings_appearance_visible, "Settings stays behind");
-    assert_eq!(manager.theme_manager_default_name_text, "YShell Default");
+    assert_eq!(manager.theme_manager_default_name_text, "gTerm Default");
 
     // Applying a theme from the manager updates the Settings summary.
     let dracula_index = manager
@@ -1505,13 +1505,13 @@ fn session_editor_choice_combo_updates_the_draft_and_preview() {
     let scheme_row = editor_appearance_row(&opened, "appearance.color_scheme");
     assert_eq!(scheme_row.kind, "choice");
     assert_eq!(scheme_row.state, "inherit");
-    let default_index = choice_index(scheme_row, "YShell Default");
+    let default_index = choice_index(scheme_row, "gTerm Default");
     assert_eq!(scheme_row.selected, default_index);
-    assert_eq!(scheme_row.value, "YShell Default");
+    assert_eq!(scheme_row.value, "gTerm Default");
     assert!(scheme_row
         .options
         .iter()
-        .any(|option| option == "YShell Default"));
+        .any(|option| option == "gTerm Default"));
 
     // Selecting an index (what WinComboBox reports) flips the field to explicit,
     // stores the scheme id in the draft and re-renders the preview immediately.

@@ -131,10 +131,11 @@ export component MenuBar inherits Rectangle {
                     horizontal-stretch: 0;
                     background: transparent;
 
-                    Icon {
-                        name: "terminal";
-                        icon-color: Theme.text-primary;
-                        icon-size: Theme.icon-size-small;
+                    Image {
+                        source: @image-url("../icons/brand/gterm-32.png");
+                        width: Theme.icon-size-small;
+                        height: Theme.icon-size-small;
+                        image-fit: contain;
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                     }

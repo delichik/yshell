@@ -1,16 +1,16 @@
-YShell — Open source licenses
+gTerm — Open source licenses
 ================================================================================
 
-This file is embedded into the About dialog at compile time (include_str!). It contains the full license texts for YShell, bundled fonts, and third-party crates used by this build.
+This file is embedded into the About dialog at compile time (include_str!). It contains the full license texts for gTerm, bundled fonts, and third-party crates used by this build.
 
 Generated for cargo metadata platform filter: x86_64-pc-windows-gnu
 Third-party crates listed: 428
 
 --------------------------------------------------------------------------------
-YShell
+gTerm
 License: GPL-3.0-only
 --------------------------------------------------------------------------------
-YShell is licensed under the GNU General Public License, version 3 only (GPL-3.0-only).
+gTerm is licensed under the GNU General Public License, version 3 only (GPL-3.0-only).
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007

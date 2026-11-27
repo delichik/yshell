@@ -56,7 +56,7 @@ fn dispatch(invocation: CliInvocation) -> AppResult<()> {
             host::run_host_headless(config_dir, false)
         }
         CliCommand::AttachShell => Err(AppError::new(
-            "--attach is internal to yshell-shell; run `yshell` to open a window",
+            "--attach is internal to gterm-ui; run `gterm` to open a window",
         )),
         CliCommand::SessionWorker {
             session_id,

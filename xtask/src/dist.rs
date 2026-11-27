@@ -67,14 +67,13 @@ pub struct ChecksumOptions {
     pub output: Option<String>,
 }
 
-/// Thin role executables shipped next to the user-facing `yshell` entry.
+/// Thin role executables shipped next to the user-facing `gterm` entry.
 ///
-/// `yshell` itself is the headless Host entry (it spawns the GUI Shell and the
+/// `gterm` itself is the headless Host entry (it spawns the GUI Shell and the
 /// worker / MCP children), so it is not a "role" binary here. Keep this list in
 /// sync with the `[[bin]]` targets in `crates/yshell-app/Cargo.toml` (and
 /// `crates/yshell-app/src/host/roles.rs`, which resolves them at runtime).
-pub const ROLE_BINARY_NAMES: [&str; 3] =
-    ["yshell-shell", "yshell-session-worker", "yshell-mcp-daemon"];
+pub const ROLE_BINARY_NAMES: [&str; 3] = ["gterm-ui", "gterm-session-worker", "gterm-mcp-daemon"];
 
 /// Operating system of the build target.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -122,10 +121,10 @@ impl TargetOs {
         }
     }
 
-    /// Every executable shipped in the bundle: the Host entry `yshell`
+    /// Every executable shipped in the bundle: the Host entry `gterm`
     /// followed by the thin role binaries (GUI Shell / worker / MCP daemon).
     pub fn binary_names(&self) -> Vec<String> {
-        std::iter::once("yshell")
+        std::iter::once("gterm")
             .chain(ROLE_BINARY_NAMES)
             .map(|base| self.exe_name(base))
             .collect()
@@ -230,7 +229,7 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     let binary: &Path = binaries
         .first()
         .map(PathBuf::as_path)
-        .expect("the binary name list always contains yshell");
+        .expect("the binary name list always contains gterm");
     if options.no_build {
         for path in &binaries {
             if !path.is_file() {
@@ -260,7 +259,7 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     }
 
     if !options.no_smoke {
-        // Smoke every executable: `yshell` is the Host entry, the role binaries
+        // Smoke every executable: `gterm` is the Host entry, the role binaries
         // are spawned as children at runtime and must start too.
         for path in &binaries {
             let mut command = Command::new(path);
@@ -272,7 +271,7 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     }
 
     let mut artifacts: Vec<PathBuf> = Vec::new();
-    let portable_name = format!("yshell-{version}-{platform}-portable");
+    let portable_name = format!("gterm-{version}-{platform}-portable");
     if options.formats.contains(&Format::Portable) {
         let staging = out_dir.join(&portable_name);
         prepare_portable_staging(
@@ -283,7 +282,7 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
         artifacts.push(archive);
     }
 
-    let installer_name = format!("yshell-{version}-{platform}");
+    let installer_name = format!("gterm-{version}-{platform}");
     for format in &options.formats {
         if *format == Format::Portable {
             continue;
@@ -450,8 +449,8 @@ fn prepare_portable_staging(
         false,
     )?;
     let launcher = match target_os {
-        TargetOs::Windows => "yshell-portable.cmd",
-        _ => "yshell-portable.sh",
+        TargetOs::Windows => "gterm-portable.cmd",
+        _ => "gterm-portable.sh",
     };
     copy_file(
         &root.join("packaging").join(launcher),
@@ -460,7 +459,7 @@ fn prepare_portable_staging(
     )?;
 
     let mut build_info = String::new();
-    build_info.push_str("YShell portable build\n");
+    build_info.push_str("gTerm portable build\n");
     build_info.push_str(&format!("version : {version}\n"));
     build_info.push_str(&format!("target  : {target}\n"));
     build_info.push_str(&format!(
@@ -537,13 +536,13 @@ fn collect_files_into(root: &Path, dir: &Path, entries: &mut Vec<ArchiveEntry>) 
 }
 
 /// Whether a bundled file is an executable that should keep its exec bit
-/// (`yshell`, every role binary and the portable shell launcher).
+/// (`gterm`, every role binary and the portable shell launcher).
 fn is_executable_artifact(file_name: &str) -> bool {
     if file_name.ends_with(".sh") {
         return true;
     }
     let stem = file_name.strip_suffix(".exe").unwrap_or(file_name);
-    stem == "yshell" || ROLE_BINARY_NAMES.contains(&stem)
+    stem == "gterm" || ROLE_BINARY_NAMES.contains(&stem)
 }
 
 /// Copies product-shipped open-source fonts next to the binary (`fonts/`).
@@ -739,16 +738,16 @@ mod tests {
     #[test]
     fn platform_slugs_follow_the_release_naming_scheme() {
         let cases = [
-            ("x86_64-pc-windows-msvc", "windows-x86_64", "yshell.exe"),
-            ("aarch64-apple-darwin", "macos-aarch64", "yshell"),
-            ("x86_64-unknown-linux-gnu", "linux-x86_64", "yshell"),
-            ("x86_64-unknown-freebsd", "freebsd-x86_64", "yshell"),
+            ("x86_64-pc-windows-msvc", "windows-x86_64", "gterm.exe"),
+            ("aarch64-apple-darwin", "macos-aarch64", "gterm"),
+            ("x86_64-unknown-linux-gnu", "linux-x86_64", "gterm"),
+            ("x86_64-unknown-freebsd", "freebsd-x86_64", "gterm"),
         ];
         for (triple, slug, binary) in cases {
             let os = TargetOs::parse(triple).unwrap();
             let arch = Arch::parse(triple).unwrap();
             assert_eq!(format!("{}-{}", os.slug(), arch.slug()), slug, "{triple}");
-            assert_eq!(os.exe_name("yshell"), binary, "{triple}");
+            assert_eq!(os.exe_name("gterm"), binary, "{triple}");
         }
     }
 
@@ -756,10 +755,7 @@ mod tests {
     fn role_binaries_ship_next_to_the_host_entry() {
         let windows = TargetOs::parse("x86_64-pc-windows-msvc").unwrap();
         let windows_names = windows.binary_names();
-        assert_eq!(
-            windows_names.first().map(String::as_str),
-            Some("yshell.exe")
-        );
+        assert_eq!(windows_names.first().map(String::as_str), Some("gterm.exe"));
         assert_eq!(windows_names.len(), 1 + ROLE_BINARY_NAMES.len());
         for role in ROLE_BINARY_NAMES {
             assert!(
@@ -768,38 +764,38 @@ mod tests {
             );
         }
         assert!(
-            !windows_names.iter().any(|name| name == "yshell-host.exe"),
-            "yshell.exe is the Host entry; there is no separate yshell-host binary"
+            !windows_names.iter().any(|name| name == "gterm-host.exe"),
+            "gterm.exe is the Host entry; there is no separate gterm-host binary"
         );
 
         let linux = TargetOs::parse("x86_64-unknown-linux-gnu").unwrap();
         let linux_names = linux.binary_names();
-        assert_eq!(linux_names.first().map(String::as_str), Some("yshell"));
+        assert_eq!(linux_names.first().map(String::as_str), Some("gterm"));
         for role in ROLE_BINARY_NAMES {
             assert!(
                 linux_names.iter().any(|name| name == role),
                 "Linux bundle must ship {role}"
             );
         }
-        assert!(!linux_names.iter().any(|name| name == "yshell-host"));
+        assert!(!linux_names.iter().any(|name| name == "gterm-host"));
         assert_eq!(linux_names.len(), 1 + ROLE_BINARY_NAMES.len());
     }
 
     #[test]
     fn every_bundled_executable_keeps_its_exec_bit() {
         for executable in [
-            "yshell",
-            "yshell.exe",
-            "yshell-shell",
-            "yshell-session-worker.exe",
-            "yshell-mcp-daemon",
+            "gterm",
+            "gterm.exe",
+            "gterm-ui",
+            "gterm-session-worker.exe",
+            "gterm-mcp-daemon",
         ] {
             assert!(is_executable_artifact(executable), "{executable}");
         }
-        assert!(is_executable_artifact("yshell-portable.sh"));
+        assert!(is_executable_artifact("gterm-portable.sh"));
         assert!(
-            !is_executable_artifact("yshell-host"),
-            "yshell-host is no longer shipped"
+            !is_executable_artifact("gterm-host"),
+            "gterm-host is no longer shipped"
         );
         assert!(!is_executable_artifact("README.md"));
         assert!(!is_executable_artifact("fonts/DejaVuSansMono.ttf"));

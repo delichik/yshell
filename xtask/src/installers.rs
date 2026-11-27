@@ -123,7 +123,7 @@ pub struct InstallerContext<'a> {
     pub root: &'a Path,
     pub out_dir: &'a Path,
     pub work_dir: &'a Path,
-    /// Host entry executable (`yshell`; headless, spawns the GUI Shell child).
+    /// Host entry executable (`gterm`; headless, spawns the GUI Shell child).
     pub binary: &'a Path,
     /// Thin role executables shipped beside [`Self::binary`] (GUI Shell /
     /// SessionWorker / MCP daemon).
@@ -213,7 +213,7 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     let themes_dir = work.join("themes");
     crate::dist::copy_shipped_themes_public(ctx.root, &themes_dir)?;
 
-    let template = ctx.root.join("packaging/windows/yshell.wxs");
+    let template = ctx.root.join("packaging/windows/gterm.wxs");
     let version = msi_version(ctx.version);
     let binary_path = absolute_path(ctx.binary)?;
     let [shell_bin, worker_bin, daemon_bin] = ctx.role_binary_paths()?;
@@ -222,6 +222,7 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     let license_rtf = absolute_path(&license_rtf_path)?;
     let fonts = absolute_path(&fonts_dir)?;
     let themes = absolute_path(&themes_dir)?;
+    let icon = absolute_path(&ctx.root.join("assets/icons/gterm.ico"))?;
     let rendered = render_template(
         &template,
         &[
@@ -235,12 +236,13 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
             ("@LICENSE_RTF@", license_rtf.as_str()),
             ("@FONTS_DIR@", fonts.as_str()),
             ("@THEMES_DIR@", themes.as_str()),
+            ("@ICON@", icon.as_str()),
         ],
     )?;
-    let source = work.join("yshell.wxs");
+    let source = work.join("gterm.wxs");
     fs::write(&source, rendered)?;
 
-    let object = work.join("yshell.wixobj");
+    let object = work.join("gterm.wixobj");
     let mut compile = Command::new(&candle);
     compile
         .args(["-nologo", "-arch"])
@@ -281,14 +283,14 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
 
         let stage = ctx.work_dir.join("dmg");
         recreate_dir(&stage)?;
-        let app = stage.join("YShell.app");
+        let app = stage.join("gTerm.app");
         let macos_dir = app.join("Contents/MacOS");
         let resources_dir = app.join("Contents/Resources");
         fs::create_dir_all(&macos_dir)?;
         fs::create_dir_all(&resources_dir)?;
 
-        copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
-        // The Host entry (`yshell`) spawns these role executables as siblings.
+        copy_file(ctx.binary, &macos_dir.join("gterm"), true)?;
+        // The Host entry (`gterm`) spawns these role executables as siblings.
         for role in ctx.role_binaries {
             let name = role
                 .file_name()
@@ -299,10 +301,10 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         crate::dist::copy_shipped_fonts_public(ctx.root, &macos_dir.join("fonts"))?;
         crate::dist::copy_shipped_themes_public(ctx.root, &macos_dir.join("themes"))?;
 
-        let icon_source = ctx.root.join("assets/icons/yshell.icns");
+        let icon_source = ctx.root.join("assets/icons/gterm.icns");
         let icon_entry = if icon_source.is_file() {
-            copy_file(&icon_source, &resources_dir.join("yshell.icns"), false)?;
-            "  <key>CFBundleIconFile</key>\n  <string>yshell</string>\n".to_string()
+            copy_file(&icon_source, &resources_dir.join("gterm.icns"), false)?;
+            "  <key>CFBundleIconFile</key>\n  <string>gterm</string>\n".to_string()
         } else {
             String::new()
         };
@@ -333,7 +335,7 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         let mut command = Command::new(hdiutil);
         command
             .args(["create", "-volname"])
-            .arg(format!("YShell {}", short_version(ctx.version)))
+            .arg(format!("gTerm {}", short_version(ctx.version)))
             .arg("-srcfolder")
             .arg(&stage)
             .args(["-ov", "-format", "UDZO"])
@@ -392,8 +394,8 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         fs::create_dir_all(top.join(dir))?;
     }
     let sources = top.join("SOURCES");
-    copy_file(ctx.binary, &sources.join("yshell"), true)?;
-    // Role executables must sit in /usr/bin beside `yshell` (sibling lookup).
+    copy_file(ctx.binary, &sources.join("gterm"), true)?;
+    // Role executables must sit in /usr/bin beside `gterm` (sibling lookup).
     for role in ctx.role_binaries {
         let name = role
             .file_name()
@@ -401,8 +403,22 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         copy_file(role, &sources.join(name), true)?;
     }
     copy_file(
-        &ctx.root.join("packaging/linux/yshell.desktop"),
-        &sources.join("yshell.desktop"),
+        &ctx.root.join("packaging/linux/gterm.desktop"),
+        &sources.join("gterm.desktop"),
+        false,
+    )?;
+    for sz in ["16x16", "32x32", "48x48", "128x128", "256x256", "512x512"] {
+        let icon_dest = sources.join("icons").join(sz);
+        fs::create_dir_all(&icon_dest)?;
+        copy_file(
+            &ctx.root.join(format!("assets/icons/linux/{sz}/gterm.png")),
+            &icon_dest.join("gterm.png"),
+            false,
+        )?;
+    }
+    copy_file(
+        &ctx.root.join("assets/icons/svg/gterm.svg"),
+        &sources.join("gterm.svg"),
         false,
     )?;
     copy_file(&ctx.root.join("LICENSE"), &sources.join("LICENSE"), false)?;
@@ -416,14 +432,14 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
 
     let (version, release) = rpm_version(ctx.version);
     let spec = render_template(
-        &ctx.root.join("packaging/linux/yshell.spec.in"),
+        &ctx.root.join("packaging/linux/gterm.spec.in"),
         &[
             ("@VERSION@", &version),
             ("@RELEASE@", &release),
             ("@ARCH@", ctx.arch.rpm()),
         ],
     )?;
-    let spec_path = top.join("SPECS/yshell.spec");
+    let spec_path = top.join("SPECS/gterm.spec");
     fs::write(&spec_path, spec)?;
 
     let mut command = Command::new(&rpmbuild);
@@ -692,8 +708,8 @@ mod tests {
     #[test]
     fn msi_wxs_ships_fonts_beside_the_executable() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
-            .expect("read packaging/windows/yshell.wxs");
+        let wxs = fs::read_to_string(root.join("packaging/windows/gterm.wxs"))
+            .expect("read packaging/windows/gterm.wxs");
         assert!(
             wxs.contains("@FONTS_DIR@"),
             "MSI template must take a staged fonts directory"
@@ -703,7 +719,7 @@ mod tests {
             "MSI must install fonts next to the exe (resolve_fonts_dir)"
         );
         assert!(
-            wxs.contains("ComponentRef Id=\"YShellFonts\""),
+            wxs.contains("ComponentRef Id=\"GTermFonts\""),
             "MSI feature must include the fonts component"
         );
         assert!(
@@ -715,8 +731,8 @@ mod tests {
     #[test]
     fn msi_wxs_ships_themes_beside_the_executable() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
-            .expect("read packaging/windows/yshell.wxs");
+        let wxs = fs::read_to_string(root.join("packaging/windows/gterm.wxs"))
+            .expect("read packaging/windows/gterm.wxs");
         assert!(
             wxs.contains("@THEMES_DIR@"),
             "MSI template must take a staged themes directory"
@@ -726,7 +742,7 @@ mod tests {
             "MSI must install themes next to the exe (resolve_shipped_themes_dir)"
         );
         assert!(
-            wxs.contains("ComponentRef Id=\"YShellThemes\""),
+            wxs.contains("ComponentRef Id=\"GTermThemes\""),
             "MSI feature must include the themes component"
         );
         assert!(
@@ -738,16 +754,20 @@ mod tests {
     #[test]
     fn msi_wxs_installs_every_role_executable_beside_the_host_entry() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
-            .expect("read packaging/windows/yshell.wxs");
+        let wxs = fs::read_to_string(root.join("packaging/windows/gterm.wxs"))
+            .expect("read packaging/windows/gterm.wxs");
         assert!(
             wxs.contains("@BINARY@"),
             "MSI template must install the Host entry executable"
         );
+        assert!(
+            wxs.contains("@ICON@") && wxs.contains("gterm.exe"),
+            "MSI template must configure the gterm.exe icon and shortcut"
+        );
         for (placeholder, component) in [
-            ("@SHELL_BIN@", "YShellShellExecutable"),
-            ("@SESSION_WORKER_BIN@", "YShellSessionWorkerExecutable"),
-            ("@MCP_DAEMON_BIN@", "YShellMcpDaemonExecutable"),
+            ("@SHELL_BIN@", "GTermUiExecutable"),
+            ("@SESSION_WORKER_BIN@", "GTermSessionWorkerExecutable"),
+            ("@MCP_DAEMON_BIN@", "GTermMcpDaemonExecutable"),
         ] {
             assert!(
                 wxs.contains(placeholder),
@@ -763,8 +783,8 @@ mod tests {
             );
         }
         assert!(
-            !wxs.contains("@HOST_BIN@") && !wxs.contains("YShellHostExecutable"),
-            "yshell.exe is the Host entry; there is no separate yshell-host binary"
+            !wxs.contains("@HOST_BIN@") && !wxs.contains("GTermHostExecutable"),
+            "gterm.exe is the Host entry; there is no separate gterm-host binary"
         );
     }
 }

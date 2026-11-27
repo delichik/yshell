@@ -11,7 +11,8 @@ import { DetailRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component AboutWindow inherits Window {
-    title: @tr("About YShell");
+    title: @tr("About gTerm");
+    icon: @image-url("../icons/brand/gterm-256.png");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-standard;
@@ -57,7 +58,7 @@ export component AboutWindow inherits Window {
         ToolWindowChrome {
             width: Theme.tool-window-width-standard;
             height: Theme.tool-window-height-standard;
-            title-text: @tr("About YShell");
+            title-text: @tr("About gTerm");
             native-title-drag: root.native_title_drag;
             close-requested => { root.dismiss(); }
             title-drag-requested => { root.title_drag_requested(); }
@@ -66,24 +67,37 @@ export component AboutWindow inherits Window {
                 vertical-stretch: 1;
                 spacing: Theme.spacing-16;
 
-                // --- A · copy：产品名 + 一句说明 ---------------------------
-                VerticalLayout {
-                    spacing: Theme.spacing-4;
+                // --- A · copy：产品图标 + 产品名 + 一句说明 ----------------
+                HorizontalLayout {
+                    spacing: Theme.spacing-12;
+                    alignment: start;
 
-                    Text {
-                        text: @tr("YShell {0}", root.version-text);
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        wrap: no-wrap;
-                        overflow: elide;
+                    Image {
+                        source: @image-url("../icons/brand/gterm-96.png");
+                        width: 48px;
+                        height: 48px;
+                        image-fit: contain;
                     }
 
-                    Text {
-                        text: @tr("A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.");
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        wrap: word-wrap;
+                    VerticalLayout {
+                        spacing: Theme.spacing-4;
+                        horizontal-stretch: 1;
+
+                        Text {
+                            text: @tr("gTerm {0}", root.version-text);
+                            color: Theme.text-primary;
+                            font-size: Theme.font-subtitle;
+                            font-weight: Theme.weight-semibold;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: @tr("A native desktop terminal for SSH, SFTP, tunnels and multi-protocol workflows.");
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
                     }
                 }
 

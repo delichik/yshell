@@ -21,14 +21,14 @@ D:\NewSpace\yshell\target\
 
 | 产物 | 规范路径 | 说明 |
 |---|---|---|
-| debug 二进制 | `target\debug\` | 本地开发 / 冒烟；`yshell`、`yshell-shell`、`yshell-session-worker`、`yshell-mcp-daemon` |
+| debug 二进制 | `target\debug\` | 本地开发 / 冒烟；`gterm`、`gterm-ui`、`gterm-session-worker`、`gterm-mcp-daemon` |
 | release 二进制 | `target\release\` | 正式 4 个 exe（LTO + strip） |
 | 打包 staging | `target\<triple>\release\` | `cargo xtask dist` 中间目录，打包完成后可随 `cargo clean` 清掉 |
-| 可分发产物 | `dist\` | 只允许最新 `yshell-<version>-<platform>-<formats>.zip` + `.sha256` |
+| 可分发产物 | `dist\` | 只允许最新 `gterm-<version>-<platform>-<formats>.zip` + `.sha256` |
 | 测试临时配置 | `%TEMP%\yshell-*` | 用完即删，不要放进仓库 |
 | 诊断日志 | `%TEMP%\yshell-logs\` 或配置目录 `logs\` | 不要写到仓库根目录 |
 
-发布包固定 **4 个 exe**（`yshell` Host 入口 + `yshell-shell` / `yshell-session-worker` / `yshell-mcp-daemon`），**没有 `yshell-host.exe`**。
+发布包固定 **4 个 exe**（`gterm` Host 入口 + `gterm-ui` / `gterm-session-worker` / `gterm-mcp-daemon`），**没有 `gterm-host.exe`**。
 
 ## 3. 命令
 

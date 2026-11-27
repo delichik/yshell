@@ -1,6 +1,6 @@
-# YShell
+# gTerm
 
-YShell is an open-source, cross-platform SSH terminal and SFTP client planned for Windows, Linux, and macOS.
+gTerm (formerly YShell) is an open-source, cross-platform multi-protocol terminal and SFTP client planned for Windows, Linux, and macOS.
 
 Current product focus: move toward an app-owned SSH/SFTP implementation. Any path that delegates live shell or file-transfer work to local system `ssh` / `sftp` should be treated as a temporary validation bridge, not release progress.
 
@@ -10,16 +10,16 @@ The repository is a Rust workspace with crate boundaries, a native Slint app she
 
 ## Native app shell
 
-Running `yshell` without arguments starts the native Slint main window with the session manager, toolbar, terminal area, SFTP/tunnel/quick-command docks, and status bar wired to Rust callbacks.
+Running `gterm` without arguments starts the headless Host entry and opens the native Slint main window (`gterm-ui`) with the session manager, toolbar, terminal area, SFTP/tunnel/quick-command docks, and status bar wired to Rust callbacks.
 
 The CLI also exposes smoke-friendly commands:
 
 ```bash
-yshell --config-dir /tmp/yshell-config --check-config
-yshell --config-dir /tmp/yshell-config --print-config-dir
-yshell --config-dir /tmp/yshell-config
-yshell --quick-connect user@example.com
-yshell --version
+gterm --config-dir /tmp/gterm-config --check-config
+gterm --config-dir /tmp/gterm-config --print-config-dir
+gterm --config-dir /tmp/gterm-config
+gterm --quick-connect user@example.com
+gterm --version
 ```
 
 `--config-dir <path>` selects the configuration directory (test / smoke isolation and portable runs) and is the **only** configuration override: app settings (language, appearance, motion, fonts, local shell, secret store) are read from that directory, never from `YSHELL_*` environment variables.
@@ -28,20 +28,20 @@ Quick Connect input is parsed and validated both from the CLI and from the nativ
 
 ### MCP (AI control of terminal sessions)
 
-MCP is an opt-in product feature: open YShell → **Settings → AI / MCP → Enable MCP**. The GUI then hosts a local endpoint. AI hosts (Cursor, Claude Desktop, or any stdio MCP client) start `yshell --mcp` as their MCP server process — that flag is not a user workflow.
+MCP is an opt-in product feature: open gTerm → **Settings → AI / MCP → Enable MCP**. The Host then starts `gterm-mcp-daemon`. AI hosts (Cursor, Claude Desktop, or any stdio MCP client) start `gterm --mcp` as their MCP server process — that flag is not a user workflow.
 
 ```json
 {
   "mcpServers": {
-    "yshell": {
-      "command": "yshell",
+    "gterm": {
+      "command": "gterm",
       "args": ["--mcp"]
     }
   }
 }
 ```
 
-If `yshell` is not on `PATH`, set `command` to the absolute path of the binary. Prerequisites: GUI running and MCP enabled.
+If `gterm` is not on `PATH`, set `command` to the absolute path of the binary. Prerequisites: GUI running and MCP enabled.
 
 **In scope:** list saved profiles and terminal tabs; after user approval, `session_run` (wait for output), input/output, keys, connect/disconnect/duplicate. Sessions report blockers (`password`, `host_key`, …) when the GUI still needs you.
 
@@ -76,11 +76,11 @@ cargo xtask help                  # all commands and options
 
 | Artifact | Selection | Built with |
 |---|---|---|
-| `yshell-<version>-<platform>-portable.zip` / `.tar.gz` | `--formats portable` (default) | built in (zip / tar.gz) |
-| `yshell-<version>-windows-x86_64.msi` | `--formats portable,msi` | WiX Toolset v3 |
-| `yshell-<version>-macos-<arch>.dmg` | `--formats portable,dmg` | `hdiutil` |
-| `yshell-<version>-linux-x86_64.deb` | `--formats portable,deb` | cargo-deb |
-| `yshell-<version>-linux-x86_64.rpm` | `--formats portable,rpm` | `rpmbuild` |
+| `gterm-<version>-<platform>-portable.zip` / `.tar.gz` | `--formats portable` (default) | built in (zip / tar.gz) |
+| `gterm-<version>-windows-x86_64.msi` | `--formats portable,msi` | WiX Toolset v3 |
+| `gterm-<version>-macos-<arch>.dmg` | `--formats portable,dmg` | `hdiutil` |
+| `gterm-<version>-linux-x86_64.deb` | `--formats portable,deb` | cargo-deb |
+| `gterm-<version>-linux-x86_64.rpm` | `--formats portable,rpm` | `rpmbuild` |
 
 Every artifact gets a `.sha256` sidecar and `cargo xtask checksums --dir dist`
 aggregates them into `SHA256SUMS.txt`. Installers are built natively, so each
