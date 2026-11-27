@@ -40,4 +40,8 @@ pub trait ShellSession: Debug + Send {
     fn disconnect_reason(&self) -> Option<String> {
         None
     }
+
+    /// Waits briefly for any asynchronous reader loop to drain final output
+    /// and exit metadata after the backing process exits.
+    fn wait_for_exit_drain(&self, _timeout: std::time::Duration) {}
 }

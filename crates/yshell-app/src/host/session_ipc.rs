@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -526,12 +526,24 @@ pub struct SessionWorkerChild {
     pub child: Child,
 }
 
+const UNEXPECTED_WORKER_EXIT_REASON: &str =
+    "The session worker exited unexpectedly; the connection was dropped.";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WorkerExitState {
+    Running,
+    CleanExit,
+    Failed(String),
+    UnexpectedEof,
+}
+
 /// Host-side shell that proxies I/O to a SessionWorker process.
 pub struct WorkerShellSession {
     connected: Arc<AtomicBool>,
+    disconnect_requested: Arc<AtomicBool>,
     writer: Mutex<TcpStream>,
     output_rx: Mutex<Receiver<Vec<u8>>>,
-    exit_reason: Arc<Mutex<Option<String>>>,
+    exit_state: Arc<(Mutex<WorkerExitState>, Condvar)>,
 }
 
 impl std::fmt::Debug for WorkerShellSession {
@@ -610,6 +622,7 @@ impl ShellSession for WorkerShellSession {
     }
 
     fn disconnect(&mut self) -> Result<(), SshError> {
+        self.disconnect_requested.store(true, Ordering::SeqCst);
         self.connected.store(false, Ordering::SeqCst);
         if let Ok(mut writer) = self.writer.lock() {
             let _ = write_msg(&mut *writer, &HostToWorker::Disconnect);
@@ -618,7 +631,23 @@ impl ShellSession for WorkerShellSession {
     }
 
     fn disconnect_reason(&self) -> Option<String> {
-        self.exit_reason.lock().ok().and_then(|guard| guard.clone())
+        let Ok(guard) = self.exit_state.0.lock() else {
+            return None;
+        };
+        match &*guard {
+            WorkerExitState::Failed(reason) => Some(reason.clone()),
+            WorkerExitState::UnexpectedEof => Some(UNEXPECTED_WORKER_EXIT_REASON.to_owned()),
+            WorkerExitState::Running | WorkerExitState::CleanExit => None,
+        }
+    }
+
+    fn wait_for_exit_drain(&self, timeout: Duration) {
+        if let Ok(guard) = self.exit_state.0.lock() {
+            let _ = self
+                .exit_state
+                .1
+                .wait_timeout_while(guard, timeout, |state| *state == WorkerExitState::Running);
+        }
     }
 }
 
@@ -905,12 +934,22 @@ pub fn connect_via_session_worker(
 
     let (output_tx, output_rx) = mpsc::channel();
     let connected = Arc::new(AtomicBool::new(true));
-    let exit_reason = Arc::new(Mutex::new(None));
+    let disconnect_requested = Arc::new(AtomicBool::new(false));
+    let exit_state = Arc::new((Mutex::new(WorkerExitState::Running), Condvar::new()));
     let reader_connected = Arc::clone(&connected);
-    let reader_exit_reason = Arc::clone(&exit_reason);
+    let reader_disconnect_requested = Arc::clone(&disconnect_requested);
+    let reader_exit_state = Arc::clone(&exit_state);
     let reader_thread = thread::Builder::new()
         .name(format!("yshell-sw-read-{session_id}"))
-        .spawn(move || reader_loop(reader, output_tx, reader_connected, reader_exit_reason));
+        .spawn(move || {
+            reader_loop(
+                reader,
+                output_tx,
+                reader_connected,
+                reader_disconnect_requested,
+                reader_exit_state,
+            )
+        });
     if reader_thread.is_err() {
         connected.store(false, Ordering::SeqCst);
         terminate_child_pid(pid);
@@ -923,9 +962,10 @@ pub fn connect_via_session_worker(
     Ok((
         WorkerShellSession {
             connected,
+            disconnect_requested,
             writer: Mutex::new(writer),
             output_rx: Mutex::new(output_rx),
-            exit_reason,
+            exit_state,
         },
         worker_child,
     ))
@@ -935,8 +975,10 @@ fn reader_loop(
     mut reader: BufReader<TcpStream>,
     output_tx: Sender<Vec<u8>>,
     connected: Arc<AtomicBool>,
-    exit_reason: Arc<Mutex<Option<String>>>,
+    disconnect_requested: Arc<AtomicBool>,
+    exit_state: Arc<(Mutex<WorkerExitState>, Condvar)>,
 ) {
+    let mut final_exit_state: Option<WorkerExitState> = None;
     loop {
         let mut line = String::new();
         match reader.read_line(&mut line) {
@@ -966,23 +1008,32 @@ fn reader_loop(
                 }
             }
             WorkerToHost::Exited { reason } => {
-                if let Some(reason) = reason {
-                    if let Ok(mut guard) = exit_reason.lock() {
-                        *guard = Some(reason);
-                    }
-                }
+                final_exit_state = Some(match reason {
+                    Some(reason) if !reason.trim().is_empty() => WorkerExitState::Failed(reason),
+                    _ => WorkerExitState::CleanExit,
+                });
                 break;
             }
             WorkerToHost::Failed { message, .. } => {
-                if let Ok(mut guard) = exit_reason.lock() {
-                    *guard = Some(message);
-                }
+                final_exit_state = Some(WorkerExitState::Failed(message));
                 break;
             }
             WorkerToHost::Progress { .. } | WorkerToHost::Connected => {}
         }
     }
+    if let Ok(mut guard) = exit_state.0.lock() {
+        if *guard == WorkerExitState::Running {
+            *guard = final_exit_state.unwrap_or_else(|| {
+                if disconnect_requested.load(Ordering::SeqCst) {
+                    WorkerExitState::CleanExit
+                } else {
+                    WorkerExitState::UnexpectedEof
+                }
+            });
+        }
+    }
     connected.store(false, Ordering::SeqCst);
+    exit_state.1.notify_all();
 }
 
 fn spawn_worker_process(
@@ -1545,11 +1596,19 @@ mod tests {
 
         let (tx, rx) = mpsc::channel();
         let connected = Arc::new(AtomicBool::new(true));
-        let exit_reason = Arc::new(Mutex::new(None));
+        let disconnect_requested = Arc::new(AtomicBool::new(false));
+        let exit_state = Arc::new((Mutex::new(WorkerExitState::Running), Condvar::new()));
         let reader_flag = Arc::clone(&connected);
-        let reader_reason = Arc::clone(&exit_reason);
+        let reader_disconnect = Arc::clone(&disconnect_requested);
+        let reader_state = Arc::clone(&exit_state);
         let reader = thread::spawn(move || {
-            reader_loop(BufReader::new(server), tx, reader_flag, reader_reason)
+            reader_loop(
+                BufReader::new(server),
+                tx,
+                reader_flag,
+                reader_disconnect,
+                reader_state,
+            )
         });
 
         // Several idle timeouts must not end the loop.
@@ -1761,11 +1820,19 @@ mod tests {
 
         let (tx, _rx) = mpsc::channel();
         let connected = Arc::new(AtomicBool::new(true));
-        let exit_reason = Arc::new(Mutex::new(None));
+        let disconnect_requested = Arc::new(AtomicBool::new(false));
+        let exit_state = Arc::new((Mutex::new(WorkerExitState::Running), Condvar::new()));
         let reader_flag = Arc::clone(&connected);
-        let reader_reason = Arc::clone(&exit_reason);
+        let reader_disconnect = Arc::clone(&disconnect_requested);
+        let reader_state = Arc::clone(&exit_state);
         let reader = thread::spawn(move || {
-            reader_loop(BufReader::new(server), tx, reader_flag, reader_reason)
+            reader_loop(
+                BufReader::new(server),
+                tx,
+                reader_flag,
+                reader_disconnect,
+                reader_state,
+            )
         });
 
         let expected =
@@ -1783,6 +1850,82 @@ mod tests {
         reader.join().expect("reader thread");
 
         assert!(!connected.load(Ordering::SeqCst));
-        assert_eq!(exit_reason.lock().expect("lock").as_deref(), Some(expected));
+        assert_eq!(
+            *exit_state.0.lock().expect("lock"),
+            WorkerExitState::Failed(expected.to_owned())
+        );
+    }
+
+    #[test]
+    fn reader_loop_distinguishes_clean_exit_from_unexpected_eof() {
+        let spawn_session = |disconnect_requested_flag: bool| {
+            let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind reader probe");
+            let address = listener.local_addr().expect("listener addr");
+            let client = thread::spawn(move || TcpStream::connect(address).expect("connect"));
+            let (server, _) = listener.accept().expect("accept reader probe");
+            let writer = client.join().expect("client thread");
+            let session_writer = server.try_clone().expect("clone server");
+
+            let (tx, rx) = mpsc::channel();
+            let connected = Arc::new(AtomicBool::new(true));
+            let disconnect_requested = Arc::new(AtomicBool::new(disconnect_requested_flag));
+            let exit_state = Arc::new((Mutex::new(WorkerExitState::Running), Condvar::new()));
+            let reader_flag = Arc::clone(&connected);
+            let reader_disconnect = Arc::clone(&disconnect_requested);
+            let reader_state = Arc::clone(&exit_state);
+            let reader = thread::spawn(move || {
+                reader_loop(
+                    BufReader::new(server),
+                    tx,
+                    reader_flag,
+                    reader_disconnect,
+                    reader_state,
+                )
+            });
+
+            let shell = WorkerShellSession {
+                connected,
+                disconnect_requested,
+                writer: Mutex::new(session_writer),
+                output_rx: Mutex::new(rx),
+                exit_state,
+            };
+            (shell, writer, reader)
+        };
+
+        // 1. Clean remote exit sends `Exited { reason: None }` -> CleanExit, no reason.
+        let (shell, mut writer, reader) = spawn_session(false);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&WorkerToHost::Exited { reason: None }).expect("serialize")
+        )
+        .expect("write clean Exited");
+        writer.flush().expect("flush");
+        shell.wait_for_exit_drain(Duration::from_secs(1));
+        reader.join().expect("reader clean");
+        assert!(!shell.is_connected());
+        assert_eq!(shell.disconnect_reason(), None);
+
+        // 2. Dropping IPC without Exited and without disconnect_requested -> UnexpectedEof.
+        let (shell, writer, reader) = spawn_session(false);
+        drop(writer);
+        shell.wait_for_exit_drain(Duration::from_secs(1));
+        reader.join().expect("reader unexpected");
+        assert!(!shell.is_connected());
+        assert_eq!(
+            shell.disconnect_reason().as_deref(),
+            Some(UNEXPECTED_WORKER_EXIT_REASON)
+        );
+
+        // 3. Explicit disconnect -> EOF without Exited stays CleanExit.
+        let (mut shell, writer, reader) = spawn_session(false);
+        let _ = shell.disconnect();
+        let _ = writer.shutdown(std::net::Shutdown::Both);
+        drop(writer);
+        shell.wait_for_exit_drain(Duration::from_secs(1));
+        reader.join().expect("reader disconnected");
+        assert!(!shell.is_connected());
+        assert_eq!(shell.disconnect_reason(), None);
     }
 }

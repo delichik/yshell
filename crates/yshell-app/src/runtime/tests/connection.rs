@@ -154,6 +154,29 @@ fn failed_auth_retry_updates_the_prompt_in_place_and_keeps_typed_values() {
 struct StubShellSession {
     connected: bool,
     disconnect_reason: Option<String>,
+    output: std::collections::VecDeque<Vec<u8>>,
+}
+
+impl StubShellSession {
+    fn new(connected: bool, disconnect_reason: Option<String>) -> Self {
+        Self {
+            connected,
+            disconnect_reason,
+            output: std::collections::VecDeque::new(),
+        }
+    }
+
+    fn with_output(
+        connected: bool,
+        disconnect_reason: Option<String>,
+        chunks: Vec<Vec<u8>>,
+    ) -> Self {
+        Self {
+            connected,
+            disconnect_reason,
+            output: chunks.into(),
+        }
+    }
 }
 
 impl yshell_ssh::ShellSession for StubShellSession {
@@ -162,7 +185,7 @@ impl yshell_ssh::ShellSession for StubShellSession {
     }
 
     fn poll_output(&mut self) -> yshell_ssh::SshResult<Vec<u8>> {
-        Ok(Vec::new())
+        Ok(self.output.pop_front().unwrap_or_default())
     }
 
     fn write_input(&mut self, _bytes: &[u8]) -> yshell_ssh::SshResult<()> {
@@ -197,10 +220,10 @@ fn mark_session_worker_exited_surfaces_reason_and_marks_ui_dirty() {
         .sessions
         .get_mut(&session_key)
         .expect("session")
-        .attach_shell_session(Box::new(StubShellSession {
-            connected: false,
-            disconnect_reason: Some(reason.to_owned()),
-        }));
+        .attach_shell_session(Box::new(StubShellSession::new(
+            false,
+            Some(reason.to_owned()),
+        )));
     let _ = runtime.take_ui_dirty();
 
     runtime.mark_session_worker_exited(&session_key);
@@ -231,15 +254,43 @@ fn mark_session_worker_exited_surfaces_reason_and_marks_ui_dirty() {
         .sessions
         .get_mut(&clean_key)
         .expect("clean session")
-        .attach_shell_session(Box::new(StubShellSession {
-            connected: false,
-            disconnect_reason: None,
-        }));
+        .attach_shell_session(Box::new(StubShellSession::new(false, None)));
     runtime.mark_session_worker_exited(&clean_key);
     assert_eq!(
         runtime.sessions.get(&clean_key).expect("clean").state,
         yshell_core::SessionState::Disconnected
     );
+}
+
+#[test]
+fn mark_session_worker_exited_preserves_clean_exit_and_final_output_before_poll() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+    runtime
+        .sessions
+        .get_mut(&session_key)
+        .expect("session")
+        .attach_shell_session(Box::new(StubShellSession::with_output(
+            false,
+            None,
+            vec![b"logout\r\n".to_vec()],
+        )));
+    let _ = runtime.take_ui_dirty();
+
+    runtime.mark_session_worker_exited(&session_key);
+
+    assert!(
+        runtime.take_ui_dirty(),
+        "clean worker exit before tick poll must mark UI dirty"
+    );
+    let session = runtime.sessions.get(&session_key).expect("session");
+    assert_eq!(session.state, yshell_core::SessionState::Disconnected);
+    assert!(session.connection_error.is_empty());
+    assert!(session.visible_text().contains("logout"));
 }
 
 #[test]
@@ -255,10 +306,10 @@ fn poll_session_output_distinguishes_worker_failure_from_clean_eof() {
         .sessions
         .get_mut(&failed_key)
         .expect("session")
-        .attach_shell_session(Box::new(StubShellSession {
-            connected: false,
-            disconnect_reason: Some("Io: transport read".to_owned()),
-        }));
+        .attach_shell_session(Box::new(StubShellSession::new(
+            false,
+            Some("Io: transport read".to_owned()),
+        )));
     runtime
         .poll_session_output(&failed_key)
         .expect("poll failed session");
@@ -274,10 +325,7 @@ fn poll_session_output_distinguishes_worker_failure_from_clean_eof() {
         .sessions
         .get_mut(&clean_key)
         .expect("session")
-        .attach_shell_session(Box::new(StubShellSession {
-            connected: false,
-            disconnect_reason: None,
-        }));
+        .attach_shell_session(Box::new(StubShellSession::new(false, None)));
     runtime
         .poll_session_output(&clean_key)
         .expect("poll clean session");

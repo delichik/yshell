@@ -1123,6 +1123,12 @@ impl AppRuntime {
 
     /// Surface an unexpected SessionWorker exit to the Shell (projection event).
     pub(crate) fn mark_session_worker_exited(&mut self, session_key: &str) {
+        if let Some(existing) = self.sessions.get(session_key) {
+            existing.wait_for_shell_exit_drain(std::time::Duration::from_millis(200));
+        }
+        let poll_changed = self
+            .poll_session_output(session_key)
+            .is_ok_and(|outcome| outcome.output_changed || outcome.state_changed);
         let Some(existing) = self.sessions.get(session_key) else {
             return;
         };
@@ -1136,6 +1142,9 @@ impl AppRuntime {
                     transport.close();
                 }
             }
+            if poll_changed {
+                self.mark_ui_dirty();
+            }
             return;
         }
         if existing.state == yshell_core::SessionState::Failed && existing.shell_session.is_none() {
@@ -1146,6 +1155,8 @@ impl AppRuntime {
                         self.mark_ui_dirty();
                     }
                 }
+            } else if poll_changed {
+                self.mark_ui_dirty();
             }
             return;
         }

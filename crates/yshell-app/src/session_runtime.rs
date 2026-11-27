@@ -980,6 +980,12 @@ impl SessionRuntime {
             .and_then(|session| session.disconnect_reason())
     }
 
+    pub fn wait_for_shell_exit_drain(&self, timeout: std::time::Duration) {
+        if let Some(session) = self.shell_session.as_ref() {
+            session.wait_for_exit_drain(timeout);
+        }
+    }
+
     pub fn write_terminal_input(
         &mut self,
         bytes: &[u8],
