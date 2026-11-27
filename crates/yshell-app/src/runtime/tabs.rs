@@ -150,6 +150,7 @@ impl AppRuntime {
                     ));
                 } else {
                     runtime.set_state(yshell_core::SessionState::Disconnected);
+                    runtime.shell_session = None;
                     runtime.log_runtime_event(
                         "Live shell closed while the app was polling for output.",
                     );
@@ -173,6 +174,8 @@ impl AppRuntime {
         if shell_closed {
             if failure_reason.is_some() {
                 let _ = self.mark_session_failed_after_connect(session_key);
+            } else {
+                let _ = self.mark_session_disconnected_after_connect(session_key);
             }
             let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
             if is_active {

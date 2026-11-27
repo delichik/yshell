@@ -332,4 +332,12 @@ fn poll_session_output_distinguishes_worker_failure_from_clean_eof() {
     let clean_session = runtime.sessions.get(&clean_key).expect("clean session");
     assert_eq!(clean_session.state, yshell_core::SessionState::Disconnected);
     assert!(clean_session.connection_error.is_empty());
+    assert!(
+        clean_session.shell_session.is_none(),
+        "clean EOF must release the dead shell handle"
+    );
+    let reconnected = runtime
+        .reconnect_active_session()
+        .expect("reconnect after clean EOF");
+    assert_eq!(reconnected.tab_state_text, "connected");
 }

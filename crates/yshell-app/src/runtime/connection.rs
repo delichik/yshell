@@ -821,29 +821,44 @@ impl AppRuntime {
     }
 
     pub(crate) fn mark_session_failed_after_connect(&mut self, session_key: &str) -> AppResult<()> {
+        self.set_session_state_after_connect(session_key, yshell_core::SessionState::Failed)
+    }
+
+    pub(crate) fn mark_session_disconnected_after_connect(
+        &mut self,
+        session_key: &str,
+    ) -> AppResult<()> {
+        self.set_session_state_after_connect(session_key, yshell_core::SessionState::Disconnected)
+    }
+
+    fn set_session_state_after_connect(
+        &mut self,
+        session_key: &str,
+        state: yshell_core::SessionState,
+    ) -> AppResult<()> {
         let session_id = self
             .sessions
             .get(session_key)
             .map(|session| session.session_id().clone())
             .ok_or_else(|| AppError::new("runtime session is missing"))?;
-        let failed_events = match self.dispatcher.dispatch(SessionCommand::SetSessionState {
+        let events = match self.dispatcher.dispatch(SessionCommand::SetSessionState {
             session_id: session_id.clone(),
-            state: yshell_core::SessionState::Failed,
+            state,
         }) {
             Ok(events) => events,
             Err(error) => {
                 // The runtime session may exist without a dispatcher entry
                 // (e.g. a watchdog timeout on an inconsistent/partially opened
-                // session). Still leave the visible state failed instead of
+                // session). Still leave the visible state updated instead of
                 // pinning the overlay on "Connecting" forever.
                 if let Some(runtime) = self.sessions.get_mut(session_key) {
-                    runtime.set_state(yshell_core::SessionState::Failed);
+                    runtime.set_state(state);
                 }
                 return Err(AppError::from_error(error));
             }
         };
         if let Some(runtime) = self.sessions.get_mut(session_key) {
-            Self::apply_session_events(&session_id, runtime, failed_events);
+            Self::apply_session_events(&session_id, runtime, events);
         }
         Ok(())
     }
